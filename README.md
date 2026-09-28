@@ -56,7 +56,7 @@ It started life as the vim mode on [kristoffer.dev](https://kristoffer.dev) and 
 lazykeys is not on npm; install it from GitHub. `dist/` is committed, so no build step runs on install.
 
 ```sh
-pnpm add github:KristofferRisa/lazykeys#v0.1.0
+pnpm add github:KristofferRisa/lazykeys#v0.1.1
 ```
 
 ```ts
@@ -73,8 +73,8 @@ That is the whole setup. Press <kbd>Space</kbd> and wait.
 Copy `dist/lazykeys.iife.js` and `dist/lazykeys.css` into your site (or load them from jsDelivr), and call `LazyKeys.setup()`:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.0/dist/lazykeys.css">
-<script src="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.0/dist/lazykeys.iife.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.1/dist/lazykeys.css">
+<script src="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.1/dist/lazykeys.iife.js"></script>
 <script>
   const lk = LazyKeys.setup({ enabled: true });
 </script>
