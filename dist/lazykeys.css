@@ -1,0 +1,1053 @@
+/*
+ * lazykeys.css — every colour, size and layer is a --lk-* custom property.
+ *
+ * Defaults are tokyonight-ish and sit on :where(:root), which has zero
+ * specificity: map them to your own tokens anywhere and yours win, whatever
+ * the load order.
+ *
+ *   :root { --lk-accent: var(--brand); --lk-bg: var(--surface); }
+ *
+ * Layers, from the bottom (offsets from --lk-z): sidebar +50, status line
+ * +100, link hints +200, which-key +250, command line +300, floats +400,
+ * notifications +500.
+ */
+
+:where(:root) {
+  --lk-font: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --lk-font-size: 0.8125rem;
+
+  --lk-bg: #1f2335;
+  --lk-bg-alt: #292e42;
+  --lk-bg-muted: #3b4261;
+  --lk-bg-kbd: #16161e;
+  --lk-fg: #c0caf5;
+  --lk-fg-strong: #e5e9ff;
+  --lk-fg-muted: #9aa5ce;
+  --lk-border: #3b4261;
+  --lk-accent: #7aa2f7;
+  --lk-accent-fg: #1a1b26;
+  --lk-accent-soft: rgb(122 162 247 / 0.16);
+  --lk-focus: var(--lk-accent);
+
+  --lk-green: #9ece6a;
+  --lk-yellow: #e0af68;
+  --lk-orange: #ff9e64;
+  --lk-red: #f7768e;
+  --lk-blue: #7aa2f7;
+  --lk-purple: #bb9af7;
+
+  --lk-mode-normal: var(--lk-accent);
+  --lk-mode-insert: var(--lk-green);
+  --lk-mode-cmdline: var(--lk-yellow);
+  --lk-mode-hints: var(--lk-orange);
+
+  --lk-hint-bg: var(--lk-yellow);
+  --lk-hint-fg: #1a1b26;
+  --lk-search-bg: rgb(224 175 104 / 0.35);
+  --lk-search-fg: inherit;
+  --lk-search-current-bg: #ff9e64;
+  --lk-search-current-fg: #1a1b26;
+
+  --lk-radius: 10px;
+  --lk-radius-sm: 5px;
+  --lk-shadow: 0 24px 64px rgb(0 0 0 / 0.45);
+  --lk-backdrop: rgb(0 0 0 / 0.55);
+
+  --lk-status-h: 28px;
+  --lk-sidebar-w: 300px;
+  --lk-sidebar-top: 0px;
+  --lk-notify-top: 1rem;
+  --lk-cmdline-top: 16vh;
+  --lk-z: 8000;
+}
+
+/* The status line is fixed, so the page's last line needs somewhere to end.
+   Zero specificity: override with `body { padding-bottom: … }` or set
+   --lk-status-pad: 0. */
+:where(html.lk-status-on) :where(body) {
+  padding-bottom: var(--lk-status-pad, var(--lk-status-h));
+}
+
+.lk-root {
+  font-family: var(--lk-font);
+  font-size: var(--lk-font-size);
+  line-height: 1.45;
+  color: var(--lk-fg);
+}
+
+.lk-root [hidden] {
+  display: none !important;
+}
+
+.lk-root *,
+.lk-root *::before,
+.lk-root *::after {
+  box-sizing: border-box;
+}
+
+.lk-root :focus-visible {
+  outline: 2px solid var(--lk-focus);
+  outline-offset: 1px;
+}
+
+.lk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.lk-icon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  vertical-align: -0.12em;
+}
+
+.lk-root kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 0.3em;
+  border: 1px solid var(--lk-border);
+  border-radius: 4px;
+  background: var(--lk-bg-kbd);
+  color: var(--lk-accent);
+  font-family: inherit;
+  font-size: 0.85em;
+  text-align: center;
+}
+
+.lk-dot {
+  opacity: 0.4;
+}
+
+.lk-foot {
+  padding: 0.45rem 0.75rem;
+  border-top: 1px solid var(--lk-border);
+  color: var(--lk-fg-muted);
+  font-size: 0.8em;
+  line-height: 1.9;
+}
+
+.lk-foot kbd {
+  margin-right: 0.1rem;
+}
+
+/* =====================================================
+   Status line — lualine's segments, in lualine's order
+   ===================================================== */
+.lk-status {
+  --lk-mode: var(--lk-mode-normal);
+
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: calc(var(--lk-z) + 100);
+  display: flex;
+  align-items: stretch;
+  height: var(--lk-status-h);
+  background: var(--lk-bg-alt);
+  border-top: 1px solid var(--lk-border);
+  color: var(--lk-fg-muted);
+  font-size: 0.85em;
+  line-height: var(--lk-status-h);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.lk-status[data-mode='insert'] { --lk-mode: var(--lk-mode-insert); }
+.lk-status[data-mode='cmdline'] { --lk-mode: var(--lk-mode-cmdline); }
+.lk-status[data-mode='hints'] { --lk-mode: var(--lk-mode-hints); }
+
+.lk-seg {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0 0.6rem;
+}
+
+.lk-seg.is-grow {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The mode block, with the slanted edge a powerline separator draws. */
+.lk-seg--mode {
+  padding: 0 1rem 0 0.7rem;
+  background: var(--lk-mode);
+  color: var(--lk-accent-fg);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
+
+.lk-seg--section {
+  margin-left: -7px;
+  padding-right: 1rem;
+  background: var(--lk-bg-muted);
+  color: var(--lk-fg-strong);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
+
+.lk-seg--section > .lk-icon {
+  color: var(--lk-mode);
+}
+
+.lk-seg--path {
+  color: var(--lk-fg-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lk-seg--message {
+  color: var(--lk-accent);
+}
+
+.lk-seg--search {
+  color: var(--lk-yellow);
+}
+
+.lk-seg--keys {
+  justify-content: flex-end;
+  min-width: 3ch;
+  color: var(--lk-fg-strong);
+  font-weight: 700;
+}
+
+.lk-seg--position {
+  justify-content: flex-end;
+  min-width: 5ch;
+  background: var(--lk-bg-muted);
+  color: var(--lk-fg-strong);
+}
+
+@media (max-width: 640px) {
+  .lk-seg--path {
+    display: none;
+  }
+}
+
+/* =====================================================
+   Link hints
+   ===================================================== */
+.lk-hints {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--lk-z) + 200);
+  pointer-events: none;
+}
+
+.lk-hint {
+  position: absolute;
+  padding: 0 0.25rem;
+  border-radius: 3px;
+  background: var(--lk-hint-bg);
+  color: var(--lk-hint-fg);
+  font-family: var(--lk-font);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
+}
+
+.lk-hints[data-new-tab='true'] .lk-hint {
+  background: var(--lk-purple);
+}
+
+/* What you have already typed, dimmed — the rest is what is left to type. */
+.lk-hint b {
+  opacity: 0.45;
+}
+
+/* =====================================================
+   / search — painted with the CSS Custom Highlight API,
+   so the page's own DOM is untouched
+   ===================================================== */
+::highlight(lk-search) {
+  background-color: var(--lk-search-bg, rgb(224 175 104 / 0.35));
+  color: var(--lk-search-fg, inherit);
+}
+
+::highlight(lk-search-current) {
+  background-color: var(--lk-search-current-bg, #ff9e64);
+  color: var(--lk-search-current-fg, #1a1b26);
+}
+
+/* =====================================================
+   Command line — noice's floating popup, or the
+   classic line under `:set cmdline=bottom`
+   ===================================================== */
+.lk-cmdline {
+  position: fixed;
+  z-index: calc(var(--lk-z) + 300);
+  display: flex;
+  flex-direction: column;
+}
+
+.lk-cmdline[data-shape='popup'] {
+  top: var(--lk-cmdline-top);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, calc(100vw - 2rem));
+}
+
+.lk-cmdline[data-shape='bottom'] {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  flex-direction: column-reverse;
+}
+
+.lk-cmdline-box {
+  position: relative;
+  background: var(--lk-bg);
+  border: 1px solid var(--lk-accent);
+}
+
+.lk-cmdline[data-kind='search'] .lk-cmdline-box {
+  border-color: var(--lk-yellow);
+}
+
+.lk-cmdline[data-shape='popup'] .lk-cmdline-box {
+  border-radius: var(--lk-radius);
+  box-shadow: var(--lk-shadow);
+}
+
+.lk-cmdline[data-shape='bottom'] .lk-cmdline-box {
+  border-width: 1px 0 0;
+}
+
+/* The title sits on the border, the way lazy.nvim and noice title a window. */
+.lk-cmdline-title {
+  position: absolute;
+  top: -0.62em;
+  left: 1rem;
+  padding: 0 0.4rem;
+  background: var(--lk-bg);
+  color: var(--lk-accent);
+  font-size: 0.75em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lk-cmdline[data-shape='bottom'] .lk-cmdline-title,
+.lk-cmdline[data-shape='bottom'] .lk-cmdline-icon {
+  display: none;
+}
+
+.lk-cmdline-line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+}
+
+.lk-cmdline[data-shape='bottom'] .lk-cmdline-line {
+  padding: 0.35rem 0.65rem;
+}
+
+.lk-cmdline-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: var(--lk-radius-sm);
+  background: var(--lk-accent-soft);
+  color: var(--lk-accent);
+}
+
+.lk-cmdline-prefix {
+  color: var(--lk-accent);
+  font-weight: 700;
+  font-size: 1.2em;
+}
+
+.lk-cmdline-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lk-fg-strong);
+  font: inherit;
+  font-size: 1.15em;
+}
+
+.lk-root .lk-cmdline-input:focus,
+.lk-root .lk-cmdline-input:focus-visible {
+  outline: none;
+}
+
+.lk-cmdline-box:focus-within {
+  box-shadow: var(--lk-shadow), 0 0 0 1px var(--lk-focus);
+}
+
+.lk-cmdline-hint {
+  flex: 0 0 auto;
+  color: var(--lk-fg-muted);
+  font-size: 0.85em;
+}
+
+.lk-cmdline-hint[data-empty='true'] {
+  color: var(--lk-red);
+}
+
+/* The wildmenu, as noice draws it: its own window under the line. */
+.lk-cmdline-menu {
+  display: none;
+  max-height: 17rem;
+  margin-top: 0.4rem;
+  padding: 0.25rem;
+  overflow-y: auto;
+  background: var(--lk-bg);
+  border: 1px solid var(--lk-border);
+  border-radius: var(--lk-radius);
+  box-shadow: var(--lk-shadow);
+}
+
+.lk-cmdline-menu.is-open {
+  display: block;
+}
+
+.lk-cmdline[data-shape='bottom'] .lk-cmdline-menu {
+  margin: 0;
+  border-width: 1px 0 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.lk-cmdline-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  color: var(--lk-fg);
+  cursor: pointer;
+}
+
+.lk-cmdline-item:hover {
+  background: var(--lk-bg-alt);
+}
+
+.lk-cmdline-item.is-selected {
+  background: var(--lk-accent-soft);
+  color: var(--lk-fg-strong);
+}
+
+.lk-cmdline-item-key {
+  flex: 0 0 auto;
+  min-width: 12ch;
+  color: var(--lk-accent);
+  font-weight: 700;
+}
+
+.lk-cmdline-item-doc {
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--lk-fg-muted);
+  font-size: 0.9em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* =====================================================
+   which-key — anchored opposite the sidebar
+   ===================================================== */
+.lk-wk {
+  position: fixed;
+  bottom: calc(var(--lk-status-h) + 0.75rem);
+  z-index: calc(var(--lk-z) + 250);
+  max-width: calc(100vw - 2rem);
+  max-height: 62vh;
+  padding: 0.5rem;
+  overflow-y: auto;
+  background: var(--lk-bg);
+  border: 1px solid var(--lk-border);
+  border-radius: var(--lk-radius);
+  box-shadow: var(--lk-shadow);
+  animation: lk-rise 0.14s ease-out;
+}
+
+.lk-wk[data-side='left'] { left: 1rem; }
+.lk-wk[data-side='right'] { right: 1rem; }
+
+.lk-wk-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.15rem 0.4rem 0.45rem;
+  color: var(--lk-fg-muted);
+  font-size: 0.85em;
+}
+
+.lk-wk-seq {
+  color: var(--lk-accent);
+  font-weight: 700;
+}
+
+.lk-wk-count {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.lk-wk-grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(var(--lk-wk-rows, 9), auto);
+  gap: 0.05rem 1.1rem;
+}
+
+.lk-wk-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  padding: 0.18rem 0.4rem;
+  border: 0;
+  border-radius: var(--lk-radius-sm);
+  background: transparent;
+  color: var(--lk-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lk-wk-row:hover {
+  background: var(--lk-bg-alt);
+}
+
+.lk-wk-row kbd {
+  flex: 0 0 auto;
+  min-width: 4ch;
+}
+
+.lk-wk-arrow {
+  color: var(--lk-fg-muted);
+  opacity: 0.5;
+}
+
+.lk-wk-label {
+  white-space: nowrap;
+}
+
+/* A group is a menu, not a command — LazyVim names them +file, +git, +ui. */
+.lk-wk-row.is-group .lk-wk-label {
+  color: var(--lk-purple);
+}
+
+@keyframes lk-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* =====================================================
+   Notifications
+   ===================================================== */
+.lk-notify {
+  position: fixed;
+  top: var(--lk-notify-top);
+  z-index: calc(var(--lk-z) + 500);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: min(340px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.lk-notify[data-side='right'] { right: 1rem; }
+.lk-notify[data-side='left'] { left: 1rem; }
+
+/* The sidebar claims that edge while it is open. */
+html.lk-sidebar-open[data-lk-sidebar='right'] .lk-notify[data-side='right'] { right: calc(var(--lk-sidebar-w) + 1rem); }
+html.lk-sidebar-open[data-lk-sidebar='left'] .lk-notify[data-side='left'] { left: calc(var(--lk-sidebar-w) + 1rem); }
+
+.lk-toast {
+  --lk-toast: var(--lk-accent);
+
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--lk-bg);
+  border: 1px solid var(--lk-border);
+  border-left: 3px solid var(--lk-toast);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.35);
+  color: var(--lk-fg);
+  font-size: 0.9em;
+  cursor: pointer;
+  pointer-events: auto;
+  animation: lk-slide 0.18s ease-out;
+}
+
+.lk-toast[data-level='success'] { --lk-toast: var(--lk-green); }
+.lk-toast[data-level='warn'] { --lk-toast: var(--lk-yellow); }
+.lk-toast[data-level='error'] { --lk-toast: var(--lk-red); }
+
+.lk-toast > .lk-icon {
+  margin-top: 0.2em;
+  color: var(--lk-toast);
+}
+
+.lk-toast-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.lk-toast-text b {
+  color: var(--lk-toast);
+  font-size: 0.85em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lk-toast.is-leaving {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+@keyframes lk-slide {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* =====================================================
+   Sidebar — neo-tree, with pluggable sources
+   ===================================================== */
+.lk-sb {
+  position: fixed;
+  top: var(--lk-sidebar-top);
+  bottom: 0;
+  z-index: calc(var(--lk-z) + 50);
+  display: flex;
+  flex-direction: column;
+  width: var(--lk-sidebar-w);
+  max-width: 100vw;
+  background: var(--lk-bg);
+  font-size: 0.92em;
+  visibility: hidden;
+  transition: transform 0.18s ease, visibility 0s linear 0.18s;
+}
+
+html.lk-status-on .lk-sb {
+  bottom: var(--lk-status-h);
+}
+
+.lk-sb[data-side='right'] { right: 0; border-left: 1px solid var(--lk-border); transform: translateX(101%); }
+.lk-sb[data-side='left'] { left: 0; border-right: 1px solid var(--lk-border); transform: translateX(-101%); }
+
+/* visibility switches in 0s on the way in, so the panel is focusable in its
+   first frame. */
+.lk-sb.is-open {
+  visibility: visible;
+  transform: none;
+  transition: transform 0.18s ease, visibility 0s;
+}
+
+.lk-sb-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--lk-border);
+}
+
+.lk-sb-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.5rem 0.15rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--lk-fg-muted);
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+
+.lk-sb-tab span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lk-sb-tab:hover {
+  color: var(--lk-fg-strong);
+}
+
+.lk-sb-tab.is-active {
+  border-bottom-color: var(--lk-accent);
+  background: var(--lk-accent-soft);
+  color: var(--lk-accent);
+}
+
+.lk-sb-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid var(--lk-border);
+  color: var(--lk-fg-muted);
+}
+
+.lk-sb-filter input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--lk-fg-strong);
+  font: inherit;
+}
+
+.lk-root .lk-sb-filter input:focus-visible {
+  outline: none;
+}
+
+.lk-sb-list {
+  flex: 1 1 auto;
+  padding: 0.35rem 0.25rem;
+  overflow-y: auto;
+}
+
+.lk-root .lk-sb-list:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--lk-focus);
+}
+
+.lk-sb-head {
+  padding: 0.6rem 0.5rem 0.25rem;
+  color: var(--lk-fg-muted);
+  font-size: 0.8em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lk-sb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.4rem 0.22rem calc(0.4rem + var(--lk-depth, 0) * 0.8rem);
+  border-radius: var(--lk-radius-sm);
+  color: var(--lk-fg);
+  cursor: pointer;
+}
+
+.lk-sb-row:hover {
+  background: var(--lk-bg-alt);
+}
+
+.lk-sb-row.is-selected {
+  background: var(--lk-accent-soft);
+  color: var(--lk-fg-strong);
+  box-shadow: inset 2px 0 0 var(--lk-accent);
+}
+
+.lk-sb-row.is-current .lk-sb-label {
+  color: var(--lk-accent);
+  font-weight: 700;
+}
+
+.lk-sb-row.is-dormant {
+  opacity: 0.45;
+}
+
+.lk-sb-row > .lk-icon {
+  color: var(--lk-fg-muted);
+}
+
+.lk-sb-row.is-open > .lk-icon,
+.lk-sb-row.is-closed > .lk-icon {
+  color: var(--lk-yellow);
+}
+
+.lk-sb-twist {
+  display: flex;
+  flex: 0 0 auto;
+  color: var(--lk-fg-muted);
+  transition: transform 0.12s ease;
+}
+
+.lk-sb-row.is-open .lk-sb-twist {
+  transform: rotate(90deg);
+}
+
+.lk-sb-label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lk-sb-hint,
+.lk-sb-value {
+  flex: 0 1 auto;
+  max-width: 45%;
+  overflow: hidden;
+  color: var(--lk-fg-muted);
+  font-size: 0.88em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lk-sb-switch {
+  flex: 0 0 auto;
+  padding: 0 0.3rem;
+  border-radius: 3px;
+  background: var(--lk-bg-muted);
+  color: var(--lk-fg-muted);
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.lk-sb-switch[data-on='true'] {
+  background: var(--lk-accent);
+  color: var(--lk-accent-fg);
+}
+
+@media (max-width: 720px) {
+  .lk-sb {
+    --lk-sidebar-w: min(88vw, 340px);
+    box-shadow: 0 0 60px rgb(0 0 0 / 0.5);
+  }
+
+  /* A drawer over the page has no column beside it to step out of. */
+  html.lk-sidebar-open .lk-notify[data-side] {
+    left: auto;
+    right: 1rem;
+  }
+
+  .lk-wk {
+    left: 1rem;
+    right: 1rem;
+  }
+}
+
+/* =====================================================
+   Floating windows — :help, :messages, :checkhealth,
+   :Lazy, the pickers
+   ===================================================== */
+.lk-float {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--lk-z) + 400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--lk-backdrop);
+}
+
+.lk-float-win {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(920px, 100%);
+  max-height: 86vh;
+  background: var(--lk-bg);
+  border: 1px solid var(--lk-accent);
+  border-radius: var(--lk-radius);
+  box-shadow: var(--lk-shadow);
+}
+
+.lk-float-title {
+  position: absolute;
+  top: -0.68em;
+  left: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.5rem;
+  background: var(--lk-bg);
+  color: var(--lk-accent);
+  font-size: 0.8em;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.lk-float-body {
+  flex: 1 1 auto;
+  padding: 1.35rem 1.25rem 1rem;
+  overflow-y: auto;
+}
+
+.lk-root .lk-float-body:focus-visible {
+  outline: none;
+}
+
+.lk-float--picker .lk-float-body {
+  padding: 0.5rem;
+}
+
+.lk-note {
+  margin: 0 0 1.1rem;
+  color: var(--lk-fg-muted);
+  line-height: 1.6;
+}
+
+.lk-empty {
+  margin: 0;
+  padding: 0.5rem;
+  color: var(--lk-fg-muted);
+}
+
+.lk-pre {
+  margin: 0;
+  overflow-x: auto;
+  color: var(--lk-fg);
+  font-family: var(--lk-font);
+  white-space: pre;
+}
+
+.lk-float-body h3 {
+  margin: 1.2rem 0 0.4rem;
+  color: var(--lk-accent);
+  font-size: 0.95em;
+}
+
+.lk-float-body h3:first-child {
+  margin-top: 0;
+}
+
+/* :help */
+.lk-help-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem 2rem;
+}
+
+.lk-help-group h3 {
+  margin: 0 0 0.5rem;
+  color: var(--lk-fg-muted);
+  font-size: 0.8em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.lk-help-group dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.3rem 0.75rem;
+  margin: 0;
+}
+
+.lk-help-group dt,
+.lk-help-group dd {
+  margin: 0;
+}
+
+.lk-help-alias {
+  display: block;
+  color: var(--lk-fg-muted);
+  font-size: 0.85em;
+}
+
+/* :Lazy */
+.lk-lazy,
+.lk-health,
+.lk-msglist,
+.lk-picker {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lk-lazy li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.2rem 0;
+}
+
+.lk-lazy-ok { color: var(--lk-green); }
+.lk-lazy-name { flex: 1 1 auto; color: var(--lk-fg-strong); }
+.lk-lazy-detail { color: var(--lk-fg-muted); }
+.lk-lazy-ms { min-width: 8ch; color: var(--lk-accent); text-align: right; }
+
+/* :checkhealth */
+.lk-health li {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.1rem 0.6rem;
+  padding: 0.15rem 0;
+}
+
+.lk-health b { font-weight: 700; }
+.lk-health li[data-state='ok'] b { color: var(--lk-green); }
+.lk-health li[data-state='warn'] b { color: var(--lk-yellow); }
+.lk-health li[data-state='error'] b { color: var(--lk-red); }
+
+.lk-health em {
+  grid-column: 2;
+  color: var(--lk-fg-muted);
+  font-size: 0.9em;
+  font-style: normal;
+}
+
+/* :messages */
+.lk-msglist li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.18rem 0;
+  border-bottom: 1px solid var(--lk-border);
+}
+
+.lk-msglist time {
+  flex: 0 0 auto;
+  color: var(--lk-fg-muted);
+}
+
+.lk-msglist li[data-level='error'] span { color: var(--lk-red); }
+.lk-msglist li[data-level='warn'] span { color: var(--lk-yellow); }
+.lk-msglist li[data-level='success'] span { color: var(--lk-green); }
+
+/* pickers */
+.lk-picker li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.lk-picker li:hover { background: var(--lk-bg-alt); }
+
+.lk-picker li.is-selected {
+  background: var(--lk-accent-soft);
+  box-shadow: inset 2px 0 0 var(--lk-accent);
+}
+
+.lk-picker-label { flex: 1 1 auto; color: var(--lk-fg-strong); }
+.lk-picker-hint { color: var(--lk-fg-muted); font-size: 0.9em; }
+
+/* =====================================================
+   Reduced motion
+   ===================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .lk-wk,
+  .lk-toast {
+    animation: none;
+  }
+
+  .lk-sb,
+  .lk-sb.is-open,
+  .lk-sb-twist,
+  .lk-toast.is-leaving {
+    transition: none;
+  }
+}
