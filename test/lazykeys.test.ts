@@ -547,6 +547,61 @@ describe('setting labels from messages', () => {
   });
 });
 
+describe('Esc in a field (escapeInFields)', () => {
+  const field = () => document.getElementById('field') as HTMLInputElement;
+
+  it("'page' (default): the page's handler goes first and wins by preventing default", () => {
+    const k = make();
+    let focusedWhenPageSawIt = false;
+    const clear = (e: KeyboardEvent) => {
+      focusedWhenPageSawIt = document.activeElement === field();
+      if (field().value) {
+        field().value = '';
+        e.preventDefault();
+      }
+    };
+    field().addEventListener('keydown', clear);
+    field().value = 'draft';
+    field().focus();
+    press('Escape', {}, field());
+    expect(focusedWhenPageSawIt).toBe(true);
+    expect(document.activeElement).toBe(field()); // the page cleared it and kept the caret
+    expect(k.mode()).toBe('insert');
+    press('Escape', {}, field()); // now empty: nobody takes Esc, so it leaves the field
+    expect(document.activeElement).not.toBe(field());
+    expect(k.mode()).toBe('normal');
+  });
+
+  it("'page': a handler that stops propagation keeps the field too", () => {
+    make();
+    document.querySelector('main')!.addEventListener('keydown', (e) => e.stopPropagation());
+    field().focus();
+    press('Escape', {}, field());
+    expect(document.activeElement).toBe(field());
+  });
+
+  it("'blur' leaves the field before the page hears Esc (the 0.1.0 behaviour)", () => {
+    const k = make({ escapeInFields: 'blur' });
+    let focusedWhenPageSawIt = true;
+    field().addEventListener('keydown', (e) => {
+      focusedWhenPageSawIt = document.activeElement === field();
+      e.preventDefault();
+    });
+    field().focus();
+    press('Escape', {}, field());
+    expect(focusedWhenPageSawIt).toBe(false);
+    expect(k.mode()).toBe('normal');
+  });
+
+  it("'keep' never touches Esc in a field", () => {
+    const k = make({ escapeInFields: 'keep' });
+    field().focus();
+    press('Escape', {}, field());
+    expect(document.activeElement).toBe(field());
+    expect(k.mode()).toBe('insert');
+  });
+});
+
 describe('lk.redraw()', () => {
   it('re-renders status segments without touching the message', () => {
     vi.useFakeTimers();

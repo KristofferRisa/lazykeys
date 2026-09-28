@@ -12,7 +12,8 @@
  *   1. disabled, or composing (IME)                 → the page's
  *   2. a `yieldTo` guard is true                   → the page's
  *   3. a LazyKeys surface is up (cmdline, float…)  → that surface's
- *   4. the caret is in a field                     → the field's (insert mode)
+ *   4. the caret is in a field                     → the field's (insert mode;
+ *                                                     Esc per `escapeInFields`)
  *   5. already handled, or Cmd/Alt held            → the page's
  *   6. a passthrough key, at the start of a sequence → the browser's
  *   7. otherwise                                   → the dispatcher's
@@ -90,6 +91,7 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
     enabled: o.enabled ?? true,
     enabledOption: o.enabledOption === false ? null : (o.enabledOption ?? 'lazy'),
     persist: o.persist ?? true,
+    escapeInFields: o.escapeInFields ?? 'page',
     namespace: o.namespace ?? 'lazykeys',
     passthrough,
     eventName: o.eventName ?? null,
@@ -130,6 +132,12 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
       }),
     mount: o.mount ?? (() => document.body ?? document.documentElement),
   };
+}
+
+/** Where a key event started, through shadow roots. */
+function originOf(e: Event): EventTarget | null {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  return (path[0] as EventTarget | undefined) ?? e.target;
 }
 
 function createSession(namespace: string): SessionStore {
@@ -416,10 +424,12 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       return;
     }
 
-    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-    const origin = (path[0] as EventTarget | undefined) ?? e.target;
+    const origin = originOf(e);
     if (isEditable(origin)) {
-      if (e.key === 'Escape') {
+      // Esc in a field: 'blur' leaves it now, before the page hears the key.
+      // 'page' lets the page's own handlers go first (onEscapeAfter), and
+      // 'keep' leaves Esc in fields alone.
+      if (e.key === 'Escape' && opts.escapeInFields === 'blur') {
         (origin as HTMLElement).blur?.();
         setMode('normal');
         return;
@@ -452,6 +462,22 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     }
 
     if (dispatcher.feed(token, e)) e.preventDefault();
+  }
+
+  /**
+   * `escapeInFields: 'page'` — Esc in a field, once every page handler has had
+   * it (this listens on window, in the bubble phase). A handler that called
+   * preventDefault() or stopped propagation has taken it; otherwise the field
+   * is left and the mode goes back to normal.
+   */
+  function onEscapeAfter(e: KeyboardEvent): void {
+    if (opts.escapeInFields !== 'page' || e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!enabled || destroyed || e.isComposing || layers.length || yielding()) return;
+    const origin = originOf(e);
+    if (!isEditable(origin)) return;
+    if ((origin as Element).closest?.('[data-lazykeys]')) return;
+    (origin as HTMLElement).blur?.();
+    setMode('normal');
   }
 
   function onFocusIn(e: FocusEvent): void {
@@ -678,6 +704,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       document.removeEventListener('keydown', onKeydown, true);
       document.removeEventListener('focusin', onFocusIn, true);
       document.removeEventListener('focusout', onFocusOut, true);
+      window.removeEventListener('keydown', onEscapeAfter);
       for (const undo of cleanups.splice(0).reverse()) undo();
       if (echoTimer) clearTimeout(echoTimer);
       ui.destroy();
@@ -773,6 +800,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   document.addEventListener('keydown', onKeydown, true);
   document.addEventListener('focusin', onFocusIn, true);
   document.addEventListener('focusout', onFocusOut, true);
+  window.addEventListener('keydown', onEscapeAfter);
   cleanups.unshift(
     settings.on((key) => {
       if (key === null || key === 'enabled') applyEnabled();

@@ -258,6 +258,15 @@ export interface LazyKeysOptions {
   enabledOption?: string | false;
   /** Whether enable()/disable() write the `enabled` setting. Default true. */
   persist?: boolean;
+  /**
+   * Esc while the caret is in a field.
+   * - `'page'` (default): the page's own Esc handlers run first; if none of
+   *   them called `preventDefault()` or stopped propagation, the field is left
+   *   and LazyKeys is back in normal mode.
+   * - `'blur'`: leave the field at once, before the page hears the key (0.1.0).
+   * - `'keep'`: never touch Esc in a field.
+   */
+  escapeInFields?: 'page' | 'blur' | 'keep';
   /** Prefix for every storage key (`lazykeys:settings`, `lazykeys:marks`, …). */
   namespace?: string;
   /** Where settings live. Default: namespaced localStorage. */
@@ -323,6 +332,7 @@ export interface ResolvedOptions {
   enabled: boolean;
   enabledOption: string | null;
   persist: boolean;
+  escapeInFields: 'page' | 'blur' | 'keep';
   namespace: string;
   passthrough: PassthroughKey[];
   eventName: string | null;

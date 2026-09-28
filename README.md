@@ -239,6 +239,7 @@ createLazyKeys({
   enabled: true,                  // default of the `enabled` setting
   enabledOption: 'lazy',          // its :set name (:set nolazy); false = none
   persist: true,                  // enable()/disable() write that setting
+  escapeInFields: 'page',         // Esc in a field: 'page' handlers first, then blur | 'blur' | 'keep'
   namespace: 'lazykeys',          // storage keys: lazykeys:settings, lazykeys:marks, …
   storage: localStorageAdapter(), // where settings live
   defaults: { leader: ',' },      // override setting defaults
@@ -523,12 +524,15 @@ The order a key press is offered to things:
 1. LazyKeys is off, or an IME is composing → **the page's**.
 2. Any `yieldTo` guard returns true → **the page's**. Pass one per widget that owns the keyboard while open: `yieldTo: [() => terminal.isOpen(), () => palette.isOpen()]`, or add one later with `lk.yieldTo(fn)`.
 3. A LazyKeys surface is up (command line, float, sidebar, hints) → **that surface's**.
-4. The caret is in a field (`input`, `textarea`, `select`, `contenteditable`) → **the field's**. That is insert mode; <kbd>Esc</kbd> blurs the field and returns to normal.
+4. The caret is in a field (`input`, `textarea`, `select`, `contenteditable`) → **the field's**. That is insert mode. <kbd>Esc</kbd> follows `escapeInFields`:
+   - `'page'` (default) — the page's own Esc handlers run first (a search box that clears itself, a form that cancels). If none of them calls `preventDefault()` or stops propagation, LazyKeys then blurs the field and returns to normal mode.
+   - `'blur'` — blur at once, in the capture phase, before the page hears the key (the 0.1.0 behaviour).
+   - `'keep'` — Esc in a field is never touched.
 5. Already `defaultPrevented`, or <kbd>Cmd</kbd>/<kbd>Alt</kbd> held → **the page's**.
 6. A `passthrough` key (default <kbd>Ctrl-F</kbd>, <kbd>Ctrl-K</kbd>) that would *start* a sequence → **the browser's**. Inside a sequence it is an ordinary key, so a site can pass <kbd>`</kbd> through to its own terminal and still map `<leader> \``.
 7. Otherwise → **the dispatcher's**. Only keys it takes are `preventDefault()`ed.
 
-The listener is on `document` in the capture phase. Other key handlers can ask `lk.ownsKeys()` — true while LazyKeys is on and not yielding — to give up a bare key of their own (kristoffer.dev's presenter hands `p` over this way).
+The listener is on `document` in the capture phase (plus one on `window`, in the bubble phase, for `escapeInFields: 'page'`). Other key handlers can ask `lk.ownsKeys()` — true while LazyKeys is on and not yielding — to give up a bare key of their own (kristoffer.dev's presenter hands `p` over this way).
 
 ---
 
