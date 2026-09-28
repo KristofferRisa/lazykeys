@@ -106,15 +106,38 @@ export function applySet(settings: Settings, argv: string[], t: Translate): SetR
   });
 }
 
+/** A message when `messages` (or the defaults) has one for `key`, else undefined. */
+function message(t: Translate | undefined, key: string): string | undefined {
+  if (!t) return undefined;
+  const text = t(key);
+  return text === key ? undefined : text;
+}
+
+/**
+ * What a setting row is called: its own `label`, else the message
+ * `setting.<key>.label`, else `setting.<key>`, else the key. So `messages`
+ * names rows that do not name themselves — including a built-in row a
+ * consumer redefines without a label.
+ */
+export function settingLabel(row: SettingSpec, t?: Translate): string {
+  return row.label ?? message(t, `setting.${row.key}.label`) ?? message(t, `setting.${row.key}`) ?? row.key;
+}
+
+/** A setting row's help: its own `help`, else the message `setting.<key>.help`. */
+export function settingHelp(row: SettingSpec, t?: Translate): string | undefined {
+  return row.help ?? message(t, `setting.${row.key}.help`);
+}
+
 /** Completion pool for `:set`: every option, and `no…` for the booleans. */
-export function setCompletions(settings: Settings): Array<{ value: string; hint: string }> {
+export function setCompletions(settings: Settings, t?: Translate): Array<{ value: string; hint: string }> {
   const pool: Array<{ value: string; hint: string }> = [];
   for (const row of settings.schema()) {
     if (!row.option) continue;
-    pool.push({ value: row.option, hint: row.label ?? row.key });
-    if (row.type === 'boolean') pool.push({ value: 'no' + row.option, hint: row.label ?? row.key });
+    const hint = settingLabel(row, t);
+    pool.push({ value: row.option, hint });
+    if (row.type === 'boolean') pool.push({ value: 'no' + row.option, hint });
     if (row.type === 'enum') {
-      for (const v of row.values ?? []) pool.push({ value: `${row.option}=${v}`, hint: row.label ?? row.key });
+      for (const v of row.values ?? []) pool.push({ value: `${row.option}=${v}`, hint });
     }
   }
   return pool;

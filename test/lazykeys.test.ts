@@ -485,6 +485,68 @@ describe('sidebar sources by id', () => {
   });
 });
 
+describe('the enabled setting', () => {
+  it('is :set lazy by default, so :set nolazy turns LazyKeys off', () => {
+    const k = make();
+    expect(k.settings.row('lazy')?.key).toBe('enabled');
+    expect(k.exec('set nolazy')).toBe(true);
+    expect(k.isEnabled()).toBe(false);
+    k.settings.set('enabled', true);
+    expect(k.isEnabled()).toBe(true);
+    expect(k.complete('set nola').map((c) => c.value)).toContain('set nolazy');
+  });
+
+  it('takes another name, or none', () => {
+    const k = make({ enabledOption: 'vim' });
+    k.exec('set novim');
+    expect(k.isEnabled()).toBe(false);
+    k.destroy();
+    const j = make({ enabledOption: false });
+    expect(j.settings.row('enabled')?.option).toBeUndefined();
+    j.exec('set nolazy');
+    expect(j.isEnabled()).toBe(true);
+  });
+
+  it('shows in the settings source', () => {
+    make({ messages: { 'setting.enabled': 'Tastaturlaget' } });
+    lk!.exec('options');
+    const labels = Array.from(document.querySelectorAll('.lk-sb-label')).map((n) => n.textContent);
+    expect(labels[0]).toBe('Tastaturlaget');
+  });
+});
+
+describe('setting labels from messages', () => {
+  it('name and explain rows without a label, including redefined built-ins', () => {
+    const k = make({
+      messages: {
+        'setting.mood.label': 'Stemning',
+        'setting.mood.help': 'Hvordan siden føles.',
+        'setting.enabled': 'Tastaturlaget',
+        'setting.enabled.help': 'Hele laget.',
+      },
+      plugins: [
+        {
+          name: 'site',
+          settings: [
+            { key: 'mood', option: 'mood', type: 'enum', values: ['calm', 'loud'], default: 'calm' },
+            { key: 'enabled', option: 'lazy', type: 'boolean', default: true },
+            { key: 'own', option: 'own', type: 'boolean', default: true, label: 'Mine' },
+          ],
+        },
+      ],
+    });
+    k.exec('options');
+    const rows = Array.from(document.querySelectorAll('.lk-sb-row'));
+    const label = (r: Element) => r.querySelector('.lk-sb-label')?.textContent;
+    const mood = rows.find((r) => label(r) === 'Stemning');
+    expect(mood?.getAttribute('title')).toBe('Hvordan siden føles.');
+    const on = rows.find((r) => label(r) === 'Tastaturlaget');
+    expect(on?.getAttribute('title')).toBe('Hele laget.');
+    expect(rows.some((r) => label(r) === 'Mine')).toBe(true);
+    expect(k.complete('set moo').find((c) => c.value === 'set mood')?.hint).toBe('Stemning');
+  });
+});
+
 describe('lk.redraw()', () => {
   it('re-renders status segments without touching the message', () => {
     vi.useFakeTimers();

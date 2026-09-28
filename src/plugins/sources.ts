@@ -3,6 +3,7 @@
  * explorer factory a site feeds its own page list into.
  */
 
+import { settingHelp, settingLabel } from '../core/set';
 import type { PluginContext, SidebarRow, SidebarSource } from '../types';
 import { isExcluded } from './util';
 
@@ -305,21 +306,22 @@ export function settingsSource(ctx: PluginContext): SidebarSource {
             const at = row.values.indexOf(String(now));
             settings.set(row.key, row.values[(at + dir + row.values.length) % row.values.length]);
           } else if (row.type === 'number') settings.set(row.key, Number(now) + (row.step ?? 1) * dir);
-          else lk.echo(t('sidebar.textSetting', { label: row.label ?? row.key, option: row.option ?? row.key }), 'warn');
+          else lk.echo(t('sidebar.textSetting', { label: settingLabel(row, t), option: row.option ?? row.key }), 'warn');
         };
         const item: SidebarRow = {
           id: 'setting:' + row.key,
           kind: 'option',
           icon: 'gear',
           depth: group ? 1 : 0,
-          label: row.label ?? row.key,
+          label: settingLabel(row, t),
           dormant: !!(requires && !settings.get(requires.key)),
           onCycle: cycle,
           onSelect: () => cycle(1),
         };
         if (row.type === 'boolean') item.toggled = !!value;
         else item.value = String(value);
-        if (row.help) item.hint = row.help;
+        const help = settingHelp(row, t);
+        if (help) item.hint = help;
         out.push(item);
       }
       return out;

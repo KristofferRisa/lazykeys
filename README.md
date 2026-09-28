@@ -226,7 +226,7 @@ Every row below appears under `:set`, in the sidebar's settings source, and is w
 | `smoothscroll` | `smoothscroll` | off | animate motions (forced off under `prefers-reduced-motion`) |
 | `hlsearch` | `hlsearch` | on | paint every match, not just the current one |
 | `ignorecase` | `ignorecase` | on | with smartcase: an uppercase letter in the pattern means you meant it |
-| — | `enabled` | `true` | whether LazyKeys is on (`options.enabled` sets the default; `:q` and `ZZ` write it) |
+| `lazy` | `enabled` | `true` | whether LazyKeys is on: `:set nolazy` turns it off (`options.enabled` sets the default, `enabledOption` renames the option or, with `false`, keeps it out of `:set`; `:q` and `ZZ` write it too) |
 
 ---
 
@@ -237,6 +237,7 @@ Everything is optional.
 ```ts
 createLazyKeys({
   enabled: true,                  // default of the `enabled` setting
+  enabledOption: 'lazy',          // its :set name (:set nolazy); false = none
   persist: true,                  // enable()/disable() write that setting
   namespace: 'lazykeys',          // storage keys: lazykeys:settings, lazykeys:marks, …
   storage: localStorageAdapter(), // where settings live
@@ -493,6 +494,17 @@ createLazyKeys({
 ```
 
 Your own plugins can use `ctx.t('your.key')` with keys you add to `messages` too.
+
+**Setting rows are named from `messages` when they do not name themselves.** A row without a `label` is called `messages['setting.<key>.label']`, else `messages['setting.<key>']`, else its key; a row without `help` gets `messages['setting.<key>.help']`. That covers your own rows and a built-in row you redefine (say, to give `enabled` another `:set` name) without restating its label:
+
+```ts
+createLazyKeys({
+  messages: { 'setting.mood.label': 'Stemning', 'setting.mood.help': 'Hvordan siden føles.' },
+  settings: [{ key: 'mood', option: 'mood', type: 'enum', values: ['calm', 'loud'], default: 'calm' }],
+});
+```
+
+`settingLabel(row, t)` and `settingHelp(row, t)` are exported for plugins that draw rows themselves.
 
 ---
 

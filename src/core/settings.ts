@@ -23,7 +23,9 @@ export interface SettingSpec {
   min?: number;
   max?: number;
   step?: number;
+  /** What the row is called. Omitted: `messages['setting.<key>.label']`, then `['setting.<key>']`, then the key. */
   label?: string;
+  /** A line of help. Omitted: `messages['setting.<key>.help']`. */
   help?: string;
   /** Heading in the sidebar's settings source. */
   group?: string;

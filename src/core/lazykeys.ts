@@ -88,6 +88,7 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
   );
   return {
     enabled: o.enabled ?? true,
+    enabledOption: o.enabledOption === false ? null : (o.enabledOption ?? 'lazy'),
     persist: o.persist ?? true,
     namespace: o.namespace ?? 'lazykeys',
     passthrough,

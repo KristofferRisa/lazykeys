@@ -251,6 +251,11 @@ export interface PassthroughKey {
 export interface LazyKeysOptions {
   /** The default of the `enabled` setting — whether LazyKeys starts on. Default true. */
   enabled?: boolean;
+  /**
+   * The `:set` name of the `enabled` setting: `:set nolazy` turns LazyKeys
+   * off. Default `'lazy'`; `false` keeps it out of `:set`.
+   */
+  enabledOption?: string | false;
   /** Whether enable()/disable() write the `enabled` setting. Default true. */
   persist?: boolean;
   /** Prefix for every storage key (`lazykeys:settings`, `lazykeys:marks`, …). */
@@ -316,6 +321,7 @@ export interface LazyKeysOptions {
 
 export interface ResolvedOptions {
   enabled: boolean;
+  enabledOption: string | null;
   persist: boolean;
   namespace: string;
   passthrough: PassthroughKey[];
