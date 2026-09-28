@@ -59,6 +59,17 @@ export const COMMAND_EVENT = 'lazykeys:command';
 
 const DEFAULT_PASSTHROUGH = ['C-f', 'C-k'];
 
+/** Permalink anchors the common generators put inside headings, and whatever is hidden. */
+const DEFAULT_HEADING_IGNORE = [
+  'a.anchor',
+  'a.headerlink',
+  'a.header-anchor',
+  'a.heading-anchor',
+  'a.hash-link',
+  '[aria-hidden="true"]',
+  '[hidden]',
+].join(', ');
+
 function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
   const rootOpt = o.root ?? 'main';
   const root = (): Element => {
@@ -89,6 +100,7 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
       }),
     root,
     headings,
+    headingIgnore: o.headingIgnore ?? DEFAULT_HEADING_IGNORE,
     sections,
     hintTargets:
       o.hintTargets ??

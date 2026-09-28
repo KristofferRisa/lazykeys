@@ -382,6 +382,23 @@ describe('surfaces', () => {
     expect(sb.classList.contains('is-open')).toBe(false);
   });
 
+  it('the outline drops permalink anchors, never the heading text', () => {
+    document.querySelector('main')!.innerHTML = `
+      <h2 id="c">Learning C#</h2>
+      <h2 id="d">Sections §<a hidden class="anchor" aria-hidden="true" href="#d">#</a></h2>
+      <h2 id="e">Docs <a class="headerlink" href="#e">¶</a></h2>
+      <h2 id="f">Custom <span class="pin">🔗</span></h2>`;
+    const k = make();
+    k.exec('outline');
+    const labels = Array.from(document.querySelectorAll('.lk-sb-label')).map((n) => n.textContent);
+    expect(labels).toEqual(['Learning C#', 'Sections §', 'Docs', 'Custom 🔗']);
+    expect(document.querySelectorAll('main a').length).toBe(2); // the page is untouched
+    k.destroy();
+    lk = null;
+    make({ headingIgnore: '.pin' }).exec('outline');
+    expect(Array.from(document.querySelectorAll('.lk-sb-label')).at(-1)?.textContent).toBe('Custom');
+  });
+
   it('the settings source flips a switch', () => {
     const k = make();
     k.exec('options');

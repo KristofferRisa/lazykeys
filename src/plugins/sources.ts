@@ -192,6 +192,25 @@ export function explorer(options: ExplorerOptions): SidebarSource {
 // Outline — the headings of the page you are on, as document symbols
 // ---------------------------------------------------------------------------
 
+/**
+ * A heading's text without its permalink anchors: the elements matching
+ * `ignore` are dropped from a detached copy, so the page is not touched and
+ * a trailing `#` in the words themselves ("Learning C#") stays.
+ */
+export function headingText(el: Element, ignore: string): string {
+  let text = el.textContent ?? '';
+  if (ignore) {
+    try {
+      const copy = el.cloneNode(true) as Element;
+      copy.querySelectorAll(ignore).forEach((node) => node.remove());
+      text = copy.textContent ?? '';
+    } catch {
+      /* an invalid selector: keep the whole text */
+    }
+  }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 export function outlineSource(ctx: PluginContext): SidebarSource {
   return {
     id: 'outline',
@@ -209,7 +228,7 @@ export function outlineSource(ctx: PluginContext): SidebarSource {
         kind: 'symbol' as const,
         icon: 'hash',
         depth: (levels[i] as number) - min,
-        label: (el.textContent ?? '').replace(/\s*[¶#§]\s*$/, '').trim(),
+        label: headingText(el, ctx.options.headingIgnore),
         hint: el.tagName.toLowerCase(),
         onSelect() {
           ctx.lk.scroll.to(ctx.lk.scroll.offsetOf(el) - 16);

@@ -289,6 +289,13 @@ export interface LazyKeysOptions {
   root?: string | (() => Element | null);
   /** Headings for the outline source. Default `'h1, h2, h3, h4'` inside the root. */
   headings?: string;
+  /**
+   * Elements inside a heading the outline leaves out of its label — permalink
+   * anchors. Default `'a.anchor, a.headerlink, a.header-anchor,
+   * a.heading-anchor, a.hash-link, [aria-hidden="true"], [hidden]'`; `''` keeps
+   * everything. Text is never stripped, so "Learning C#" stays whole.
+   */
+  headingIgnore?: string;
   /** Targets of `{` and `}`. Default `'h2, h3'` inside the root, else the headings. */
   sections?: string | (() => Element[]);
   /** What `f` labels. */
@@ -316,6 +323,7 @@ export interface ResolvedOptions {
   navigate: (url: string, opts: NavigateOptions) => void;
   root: () => Element;
   headings: string;
+  headingIgnore: string;
   sections: () => Element[];
   hintTargets: string;
   exclude: string;

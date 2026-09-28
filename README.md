@@ -254,6 +254,7 @@ createLazyKeys({
   navigate: (url, { newTab }) => {}, // SPA routers
   root: 'main',                   // what / searches and the outline reads (falls back to body)
   headings: 'h1, h2, h3, h4',     // outline source
+  headingIgnore: 'a.anchor, …',   // elements the outline drops from heading labels (permalinks)
   sections: 'h2, h3',             // targets of { and } (string or () => Element[])
   hintTargets: 'a[href], button:not([disabled]), …', // what f labels
   exclude: '#my-terminal, .cookie-banner', // chrome that / and f ignore
@@ -377,7 +378,7 @@ interface SidebarRow {
 }
 ```
 
-The built-ins are **outline** (headings under `root`, as document symbols), **buffers** (pages visited this session) and **settings** (the schema). The **explorer** is yours to feed, because only the site knows its pages:
+The built-ins are **outline** (headings under `root`, as document symbols — permalink anchors inside a heading are left out of its label by element, never by stripping characters, so "Learning C#" stays whole; `headingIgnore` sets which elements, by default `a.anchor`, `a.headerlink`, `a.header-anchor`, `a.heading-anchor`, `a.hash-link`, `[aria-hidden="true"]` and `[hidden]`), **buffers** (pages visited this session) and **settings** (the schema). The **explorer** is yours to feed, because only the site knows its pages:
 
 ```ts
 import { explorer } from 'lazykeys';
