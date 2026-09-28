@@ -389,11 +389,19 @@ explorer({
   rootLabel: 'content/',
   fileName: (segment) => segment + '.md',  // how a leaf page is named
   indexName: '_index.md',                   // how a section's own page is named
-  current: () => location.pathname,         // "you are here"
+  current: () => location.pathname + location.search, // "you are here" (the default)
 });
 ```
 
 It turns a flat list of URL paths into a folder tree: folders above files, a section's own page first, and the branch you are standing in open.
+
+The query string is part of a page's identity: `/repo?slug=a` and `/repo?slug=b` are two entries, shown as `repo?slug=a` and `repo?slug=b` unless an entry brings its own `label` (the hash is ignored). "You are here" matches the path and query first, then the bare path, so `/search/?q=vim` still lights up `/search/`.
+
+```ts
+explorer({
+  load: async () => (await listRepos()).map((r) => ({ path: `/repo?slug=${r.slug}`, label: r.name, title: r.summary })),
+});
+```
 
 ### Replacing and removing sources
 

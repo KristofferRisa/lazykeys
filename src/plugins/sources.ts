@@ -12,8 +12,14 @@ import { isExcluded } from './util';
 // ---------------------------------------------------------------------------
 
 export interface ExplorerEntry {
-  /** A URL path (`/blog/my-post/`) or a full URL on this origin. */
+  /**
+   * A URL path (`/blog/my-post/`, `/repo?slug=a`) or a full URL on this
+   * origin. The query string is part of the page's identity, so
+   * `/repo?slug=a` and `/repo?slug=b` are two entries; the hash is not.
+   */
   path: string;
+  /** The name shown in the tree. Default: the file name, plus the query string if there is one. */
+  label?: string;
   title?: string;
   /** A section with nothing under it is still a section, not a file. */
   dir?: boolean;
@@ -30,7 +36,11 @@ export interface ExplorerOptions {
   fileName?(segment: string, entry: ExplorerEntry): string;
   /** The name a section's own page shows as inside its folder. Default `'index'`. */
   indexName?: string;
-  /** The path to mark as "you are here". Default `location.pathname`. */
+  /**
+   * The path to mark as "you are here". Default `location.pathname +
+   * location.search`; when no entry has that query string, the entry for the
+   * bare path is marked instead.
+   */
   current?(): string;
   order?: number;
 }
@@ -43,16 +53,40 @@ interface TreeNode {
   open?: boolean;
 }
 
+/** A page's identity in the tree: path and query string, no origin, no hash. */
 function pathOf(input: string): string {
   try {
-    return new URL(input, location.href).pathname;
+    const url = new URL(input, location.href);
+    return url.pathname + url.search;
   } catch {
-    return input;
+    return input.split('#')[0] as string;
   }
 }
 
+function splitPath(path: string): { pathname: string; search: string } {
+  const at = path.indexOf('?');
+  return at === -1 ? { pathname: path, search: '' } : { pathname: path.slice(0, at), search: path.slice(at) };
+}
+
 function segmentsOf(path: string): string[] {
-  return path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  return splitPath(path)
+    .pathname.replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter(Boolean);
+}
+
+const hereByDefault = (): string => location.pathname + location.search;
+
+/**
+ * The entry "you are here" is: the exact path and query first, then the bare
+ * path — so `?utm_source=…` or a search box's `?q=` does not lose its place.
+ * Null when the page is not in the list at all.
+ */
+function resolveCurrent(keys: string[], here: string): string | null {
+  const exact = pathOf(here);
+  if (keys.includes(exact)) return exact;
+  const bare = splitPath(exact).pathname;
+  return keys.includes(bare) ? bare : null;
 }
 
 /**
@@ -98,6 +132,7 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
 
   for (const entry of list) {
     const segs = segmentsOf(entry.path);
+    const { search } = splitPath(entry.path);
     const own = '/' + segs.join('/');
     let parent: TreeNode;
     let name: string;
@@ -111,7 +146,7 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
       parent = dirFor(segs.slice(0, -1));
       name = fileName(segs[segs.length - 1] as string, entry);
     }
-    const leaf: TreeNode = { label: name, path: entry.path };
+    const leaf: TreeNode = { label: entry.label ?? name + search, path: entry.path };
     if (entry.title) leaf.hint = entry.title;
     parent.children!.push(leaf);
   }
@@ -129,7 +164,7 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
   };
   sortNode(root);
 
-  const here = segmentsOf(opts.current ? opts.current() : location.pathname);
+  const here = segmentsOf(opts.current ? opts.current() : hereByDefault());
   let walk = '';
   for (const seg of here) {
     walk += '/' + seg;
@@ -137,6 +172,14 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
     if (node) node.open = true;
   }
   return root;
+}
+
+function leafPaths(node: TreeNode, out: string[] = []): string[] {
+  for (const child of node.children ?? []) {
+    if (child.children) leafPaths(child, out);
+    else out.push(child.path);
+  }
+  return out;
 }
 
 function toRows(node: TreeNode, current: string): SidebarRow[] {
@@ -170,18 +213,21 @@ export function explorer(options: ExplorerOptions): SidebarSource {
           .then(() => options.load())
           .catch(() => [] as ExplorerEntry[])
           .then((entries) => {
-            const current = options.current ? options.current() : location.pathname;
+            const here = options.current ? options.current() : hereByDefault();
             const all = entries.slice();
             // Whatever page this is, it is in the tree, so "you are here" has
             // something to highlight.
-            if (!all.some((e) => pathOf(e.path) === current)) all.push({ path: current, title: document.title });
+            if (resolveCurrent(all.map((e) => pathOf(e.path)), here) === null) {
+              all.push({ path: pathOf(here), title: document.title });
+            }
             return buildTree(all, options);
           });
       }
-      const current = options.current ? options.current() : location.pathname;
-      return cache.then((root) => [
-        { id: '/#root', label: root.label, kind: 'dir', open: true, children: toRows(root, current) } as SidebarRow,
-      ]);
+      return cache.then((root) => {
+        const here = options.current ? options.current() : hereByDefault();
+        const current = resolveCurrent(leafPaths(root), here) ?? pathOf(here);
+        return [{ id: '/#root', label: root.label, kind: 'dir', open: true, children: toRows(root, current) } as SidebarRow];
+      });
     },
     reload() {
       cache = null;
