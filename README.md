@@ -550,6 +550,10 @@ All styling is `--lk-*` custom properties with tokyonight-ish dark defaults, dec
 }
 ```
 
+Set them wherever your own tokens live. If your dark mode or themes are classes on `body` (`body.dark`, `body.theme-x`), set the `--lk-*` tokens on `body` too — a `var()` resolves where it is declared, so a mapping on `:root` would only ever see the `:root` values.
+
+**Derived tokens follow the accent wherever you set it.** `--lk-focus`, `--lk-mode-normal`, `--lk-mode-insert`, `--lk-mode-cmdline`, `--lk-mode-hints` and `--lk-hint-bg` are not declared on `:root` at all; each is read as `var(--lk-focus, var(--lk-accent))` (and so on) at the element that uses it. Setting `--lk-accent` on `body` is enough for the focus rings and the NORMAL block to follow it — there is no need to restate them. Set one explicitly only to make it differ from what it derives from.
+
 | Token | Default | Used for |
 | --- | --- | --- |
 | `--lk-font` | system monospace stack | everything LazyKeys draws |
@@ -565,10 +569,10 @@ All styling is `--lk-*` custom properties with tokyonight-ish dark defaults, dec
 | `--lk-accent` | `#7aa2f7` | titles, selection, keys |
 | `--lk-accent-fg` | `#1a1b26` | text on accent |
 | `--lk-accent-soft` | `rgb(122 162 247 / .16)` | selected rows |
-| `--lk-focus` | `var(--lk-accent)` | focus rings |
+| `--lk-focus` | falls back to `--lk-accent` (resolved at the element) | focus rings |
 | `--lk-green` `--lk-yellow` `--lk-orange` `--lk-red` `--lk-blue` `--lk-purple` | tokyonight | levels, groups |
-| `--lk-mode-normal` / `-insert` / `-cmdline` / `-hints` | accent / green / yellow / orange | the mode block |
-| `--lk-hint-bg` / `--lk-hint-fg` | yellow / dark | link hint labels (new-tab hints use `--lk-purple`) |
+| `--lk-mode-normal` / `-insert` / `-cmdline` / `-hints` | fall back to accent / green / yellow / orange (resolved at the element) | the mode block |
+| `--lk-hint-bg` / `--lk-hint-fg` | falls back to yellow / dark | link hint labels (new-tab hints use `--lk-purple`) |
 | `--lk-search-bg` / `--lk-search-fg` | translucent yellow / inherit | every match |
 | `--lk-search-current-bg` / `--lk-search-current-fg` | orange / dark | the current match |
 | `--lk-radius` / `--lk-radius-sm` | `10px` / `5px` | corners |
