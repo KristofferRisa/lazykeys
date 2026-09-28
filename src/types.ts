@@ -395,6 +395,11 @@ export interface LazyKeys {
   navigate(url: string, opts?: NavigateOptions): void;
   /** Call after an SPA navigation: closes surfaces, records the page, redraws. */
   refresh(): void;
+  /**
+   * Redraw the status line (coalesced to one frame): call it when something a
+   * segment of yours renders changed. It leaves the message segment alone.
+   */
+  redraw(): void;
   /** Stand down while `fn()` returns true. Returns its removal. */
   yieldTo(fn: () => boolean): () => void;
   plugins(): PluginInfo[];

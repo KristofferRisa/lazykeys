@@ -693,6 +693,9 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       emit('navigate', undefined);
       emit('render', undefined);
     },
+    redraw() {
+      if (!destroyed) emit('render', undefined);
+    },
     yieldTo(fn) {
       guards.add(fn);
       return () => guards.delete(fn);

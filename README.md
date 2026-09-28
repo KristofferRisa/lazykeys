@@ -408,6 +408,12 @@ interface StatusSegment {
 
 Return text or nodes you built (`h()` and `icon()` are exported); nothing is parsed as HTML. The segment element gets `lk-seg lk-seg--<id>`. It redraws on mode changes, pending keys, messages, settings changes and scroll (coalesced to one frame).
 
+When something only your segment knows about changes — a mood, a row cursor, a value fetched after load — call `lk.redraw()`. It asks for one frame of the status line and leaves the message segment as it is:
+
+```ts
+document.addEventListener('site:mood', () => lk.redraw());
+```
+
 ---
 
 ## Storage adapters
@@ -514,7 +520,7 @@ Inside JavaScript, `lk.on(event, fn)` returns an unsubscribe:
 | `echo` | `{ text, level? }` — the status line's message |
 | `escape` | — (Esc in normal mode) |
 | `navigate` | — (`refresh()` was called) |
-| `render` | — (something the status line shows changed) |
+| `render` | — (something the status line shows changed; `lk.redraw()` emits it too) |
 
 ---
 
@@ -618,6 +624,7 @@ lk.use<SidebarApi>('sidebar')?.open('outline');
 lk.mode(); lk.setMode('insert'); lk.leader(); // '<space>'
 lk.navigate('/about/', { newTab: false });
 lk.refresh();                                  // after an SPA navigation
+lk.redraw();                                   // redraw the status line (keeps the message)
 lk.yieldTo(() => dialog.open);                 // → remove()
 lk.plugins(); lk.health(); lk.messages(); lk.complete('se'); lk.exCommands();
 lk.keymap; lk.commands; lk.settings; lk.dispatcher; lk.scroll; lk.ui; lk.t;

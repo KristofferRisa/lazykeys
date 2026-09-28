@@ -407,6 +407,32 @@ describe('surfaces', () => {
   });
 });
 
+describe('lk.redraw()', () => {
+  it('re-renders status segments without touching the message', () => {
+    vi.useFakeTimers();
+    let mood = 'calm';
+    const k = make({
+      plugins: [{ name: 'site', statusline: [{ id: 'mood', order: 80, render: () => mood }] }],
+    });
+    vi.advanceTimersByTime(20);
+    k.echo('3 matches');
+    vi.advanceTimersByTime(20);
+    expect(document.querySelector('.lk-seg--mood')?.textContent).toBe('calm');
+    mood = 'loud';
+    k.redraw();
+    vi.advanceTimersByTime(20);
+    expect(document.querySelector('.lk-seg--mood')?.textContent).toBe('loud');
+    expect(document.querySelector('.lk-seg--message')?.textContent).toBe('3 matches');
+  });
+
+  it('is a no-op after destroy()', () => {
+    const k = make();
+    k.destroy();
+    lk = null;
+    expect(() => k.redraw()).not.toThrow();
+  });
+});
+
 describe('SPA navigation', () => {
   it('refresh() puts the root back after a <body> swap and keeps surfaces open', () => {
     const k = make();
