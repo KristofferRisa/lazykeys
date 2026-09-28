@@ -27,7 +27,8 @@
   --lk-accent: #7aa2f7;
   --lk-accent-fg: #1a1b26;
   --lk-accent-soft: rgb(122 162 247 / 0.16);
-  --lk-focus: var(--lk-accent);
+  /* --lk-focus is not declared here: it falls back to --lk-accent where it is
+     used (see "Derived tokens" below). */
 
   --lk-green: #9ece6a;
   --lk-yellow: #e0af68;
@@ -36,12 +37,8 @@
   --lk-blue: #7aa2f7;
   --lk-purple: #bb9af7;
 
-  --lk-mode-normal: var(--lk-accent);
-  --lk-mode-insert: var(--lk-green);
-  --lk-mode-cmdline: var(--lk-yellow);
-  --lk-mode-hints: var(--lk-orange);
-
-  --lk-hint-bg: var(--lk-yellow);
+  /* --lk-mode-normal/-insert/-cmdline/-hints and --lk-hint-bg are derived
+     too, and resolved where they are used. */
   --lk-hint-fg: #1a1b26;
   --lk-search-bg: rgb(224 175 104 / 0.35);
   --lk-search-fg: inherit;
@@ -68,6 +65,15 @@
   padding-bottom: var(--lk-status-pad, var(--lk-status-h));
 }
 
+/* Derived tokens. A token that defaults to another one (--lk-focus to
+   --lk-accent, the mode colours to accent/green/yellow/orange, the hint label
+   to yellow) is never declared on :root: a var() resolves where it is
+   declared, so `:root { --lk-focus: var(--lk-accent) }` would freeze the
+   :root accent, and a site that sets --lk-accent on body (where its .dark or
+   theme classes live) would get the wrong colour. Each one is read with its
+   fallback at the element that uses it instead, so it follows --lk-accent
+   wherever that is set — and still takes your own value when you set it. */
+
 .lk-root {
   font-family: var(--lk-font);
   font-size: var(--lk-font-size);
@@ -86,7 +92,7 @@
 }
 
 .lk-root :focus-visible {
-  outline: 2px solid var(--lk-focus);
+  outline: 2px solid var(--lk-focus, var(--lk-accent));
   outline-offset: 1px;
 }
 
@@ -142,7 +148,7 @@
    Status line — lualine's segments, in lualine's order
    ===================================================== */
 .lk-status {
-  --lk-mode: var(--lk-mode-normal);
+  --lk-mode: var(--lk-mode-normal, var(--lk-accent));
 
   position: fixed;
   left: 0;
@@ -161,9 +167,9 @@
   overflow: hidden;
 }
 
-.lk-status[data-mode='insert'] { --lk-mode: var(--lk-mode-insert); }
-.lk-status[data-mode='cmdline'] { --lk-mode: var(--lk-mode-cmdline); }
-.lk-status[data-mode='hints'] { --lk-mode: var(--lk-mode-hints); }
+.lk-status[data-mode='insert'] { --lk-mode: var(--lk-mode-insert, var(--lk-green)); }
+.lk-status[data-mode='cmdline'] { --lk-mode: var(--lk-mode-cmdline, var(--lk-yellow)); }
+.lk-status[data-mode='hints'] { --lk-mode: var(--lk-mode-hints, var(--lk-orange)); }
 
 .lk-seg {
   display: flex;
@@ -249,7 +255,7 @@
   position: absolute;
   padding: 0 0.25rem;
   border-radius: 3px;
-  background: var(--lk-hint-bg);
+  background: var(--lk-hint-bg, var(--lk-yellow));
   color: var(--lk-hint-fg);
   font-family: var(--lk-font);
   font-size: 0.7rem;
@@ -391,7 +397,7 @@
 }
 
 .lk-cmdline-box:focus-within {
-  box-shadow: var(--lk-shadow), 0 0 0 1px var(--lk-focus);
+  box-shadow: var(--lk-shadow), 0 0 0 1px var(--lk-focus, var(--lk-accent));
 }
 
 .lk-cmdline-hint {
@@ -725,7 +731,7 @@ html.lk-status-on .lk-sb {
 
 .lk-root .lk-sb-list:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 1px var(--lk-focus);
+  box-shadow: inset 0 0 0 1px var(--lk-focus, var(--lk-accent));
 }
 
 .lk-sb-head {

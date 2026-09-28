@@ -12,9 +12,10 @@
  *   1. disabled, or composing (IME)                 → the page's
  *   2. a `yieldTo` guard is true                   → the page's
  *   3. a LazyKeys surface is up (cmdline, float…)  → that surface's
- *   4. the caret is in a field                     → the field's (insert mode)
+ *   4. the caret is in a field                     → the field's (insert mode;
+ *                                                     Esc per `escapeInFields`)
  *   5. already handled, or Cmd/Alt held            → the page's
- *   6. a passthrough key                           → the browser's
+ *   6. a passthrough key, at the start of a sequence → the browser's
  *   7. otherwise                                   → the dispatcher's
  */
 import type { LazyKeys, LazyKeysOptions, Level, SidebarSource, StatusSegment } from '../types';
@@ -24,7 +25,7 @@ export declare const COMMAND_EVENT = "lazykeys:command";
 /** Make a LazyKeys instance. It attaches one keydown listener to `document`. */
 export declare function createLazyKeys(options?: LazyKeysOptions): LazyKeys;
 export type InternalLazyKeys = LazyKeys & {
-    _sources: SidebarSource[];
+    _sources(): SidebarSource[];
     _segments: StatusSegment[];
     _echo(): {
         text: string;
