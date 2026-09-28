@@ -165,7 +165,7 @@ Group labels are also declared for `g` (goto), `y` (yank), `Z` (quit), `[` (prev
 
 ### Left alone on purpose
 
-<kbd>Ctrl-F</kbd> (native find stays native) and <kbd>Ctrl-K</kbd> are passed through by default (`passthrough`), and every <kbd>Cmd</kbd>/<kbd>Alt</kbd> combination always belongs to the browser. Keys LazyKeys does not map are never prevented.
+<kbd>Ctrl-F</kbd> (native find stays native) and <kbd>Ctrl-K</kbd> are passed through by default (`passthrough`) — a passthrough key is only left alone where it would start a sequence, so it can still appear inside one — and every <kbd>Cmd</kbd>/<kbd>Alt</kbd> combination always belongs to the browser. Keys LazyKeys does not map are never prevented.
 
 ---
 
@@ -249,7 +249,7 @@ createLazyKeys({
   disable: [],                    // built-ins to leave out: ['zen', 'yank']
   messages: {},                   // override any user-facing string
   yieldTo: [],                    // stand down while any returns true
-  passthrough: ['C-f', 'C-k'],    // never take these keys
+  passthrough: ['C-f', 'C-k'],    // never start a sequence with these keys
   eventName: undefined,           // also dispatch commands as this DOM event
   navigate: (url, { newTab }) => {}, // SPA routers
   root: 'main',                   // what / searches and the outline reads (falls back to body)
@@ -504,7 +504,7 @@ The order a key press is offered to things:
 3. A LazyKeys surface is up (command line, float, sidebar, hints) → **that surface's**.
 4. The caret is in a field (`input`, `textarea`, `select`, `contenteditable`) → **the field's**. That is insert mode; <kbd>Esc</kbd> blurs the field and returns to normal.
 5. Already `defaultPrevented`, or <kbd>Cmd</kbd>/<kbd>Alt</kbd> held → **the page's**.
-6. A `passthrough` key (default <kbd>Ctrl-F</kbd>, <kbd>Ctrl-K</kbd>) → **the browser's**.
+6. A `passthrough` key (default <kbd>Ctrl-F</kbd>, <kbd>Ctrl-K</kbd>) that would *start* a sequence → **the browser's**. Inside a sequence it is an ordinary key, so a site can pass <kbd>`</kbd> through to its own terminal and still map `<leader> \``.
 7. Otherwise → **the dispatcher's**. Only keys it takes are `preventDefault()`ed.
 
 The listener is on `document` in the capture phase. Other key handlers can ask `lk.ownsKeys()` — true while LazyKeys is on and not yielding — to give up a bare key of their own (kristoffer.dev's presenter hands `p` over this way).

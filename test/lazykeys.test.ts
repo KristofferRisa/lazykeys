@@ -102,6 +102,23 @@ describe('createLazyKeys', () => {
     expect(k.mode()).toBe('normal');
   });
 
+  it('passthrough keys pass only at the start of a sequence', () => {
+    const run = vi.fn();
+    const top = vi.fn();
+    const k = make({ passthrough: ['`', 'C-f'], keys: { '<leader> `': run, '`': top, 'g C-f': run } });
+    expect(press('`').defaultPrevented).toBe(false); // the page's terminal keeps it
+    expect(top).not.toHaveBeenCalled();
+    expect(press(' ').defaultPrevented).toBe(true);
+    expect(press('`').defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    press('g');
+    expect(press('f', { ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+    press('5');
+    expect(press('f', { ctrlKey: true }).defaultPrevented).toBe(false); // a count alone is not a sequence yet
+    expect(k.dispatcher.busy).toBe(false);
+  });
+
   it('yields to consumer guards', () => {
     let open = true;
     const k = make({ yieldTo: [() => open] });

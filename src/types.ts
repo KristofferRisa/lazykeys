@@ -275,7 +275,11 @@ export interface LazyKeysOptions {
   messages?: MessageOverrides;
   /** LazyKeys stands down while any of these returns true. */
   yieldTo?: Array<() => boolean>;
-  /** Keys never taken, even when mapped. Default `['C-f', 'C-k']`. Cmd/Alt combos always pass. */
+  /**
+   * Keys never taken to start a sequence, even when mapped. Default `['C-f', 'C-k']`.
+   * Inside a sequence they are ordinary keys, so `<leader> \`` works with `\`` passed
+   * through. Cmd/Alt combos always pass.
+   */
   passthrough?: Array<string | PassthroughKey>;
   /** Also dispatch every command as this event (same detail as `lazykeys:command`). */
   eventName?: string;

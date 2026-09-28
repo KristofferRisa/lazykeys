@@ -14,7 +14,7 @@
  *   3. a LazyKeys surface is up (cmdline, float…)  → that surface's
  *   4. the caret is in a field                     → the field's (insert mode)
  *   5. already handled, or Cmd/Alt held            → the page's
- *   6. a passthrough key                           → the browser's
+ *   6. a passthrough key, at the start of a sequence → the browser's
  *   7. otherwise                                   → the dispatcher's
  */
 
@@ -420,9 +420,14 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     const token = keyName(e);
     if (!token) return;
 
+    // A passthrough key is the browser's when it would start a sequence. In
+    // the middle of one (`<leader> \``) it is just the next key.
     if (opts.passthrough.some((p) => p.key === token)) {
-      dispatcher.reset();
-      return;
+      const state = dispatcher.state;
+      if (!state.keys.length && !state.awaitingArg) {
+        dispatcher.reset();
+        return;
+      }
     }
 
     if (token === 'Escape') {
