@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lazykeys demo</title>
+  <!-- Open this file straight from disk: it loads the committed build. -->
+  <link rel="stylesheet" href="../dist/lazykeys.css">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #1a1b26;
+      --text: #c0caf5;
+      --muted: #7f89b8;
+      --link: #7aa2f7;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.7 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      padding: 0.75rem 1.5rem;
+      background: #16161e;
+      border-bottom: 1px solid #292e42;
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    header b { color: var(--text); }
+    main { max-width: 42rem; margin: 0 auto; padding: 2rem 1.5rem 6rem; }
+    a { color: var(--link); }
+    kbd {
+      padding: 0.05rem 0.35rem;
+      border: 1px solid #3b4261;
+      border-radius: 4px;
+      background: #16161e;
+      font-size: 0.85em;
+    }
+    input, button {
+      font: inherit;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid #3b4261;
+      border-radius: 6px;
+      background: #1f2335;
+      color: var(--text);
+    }
+    code { font-size: 0.9em; }
+    /* What zen mode hides is the page's call. */
+    .lk-zen header { display: none; }
+  </style>
+</head>
+<body>
+  <header><b>lazykeys</b> demo — press <kbd>Space</kbd> and wait, <kbd>?</kbd> for the map, <kbd>:q</kbd> to leave.
+    <span id="toggle-state"></span></header>
+  <main>
+    <h1>A LazyVim-shaped keyboard for any page</h1>
+    <p>This page loads <code>dist/lazykeys.iife.js</code> with a plain <code>&lt;script&gt;</code> tag. Try
+      <kbd>j</kbd>/<kbd>k</kbd>, <kbd>5j</kbd>, <kbd>gg</kbd>, <kbd>G</kbd>, <kbd>40%</kbd>, <kbd>}</kbd> and
+      <kbd>{</kbd>.</p>
+
+    <h2>Leader and which-key</h2>
+    <p>Press <kbd>Space</kbd>: a panel lists every key that can follow it, with <code>+name</code> for the ones that
+      open a further menu. <kbd>Space</kbd><kbd>u</kbd> narrows it to the toggles. This demo adds its own group,
+      <kbd>Space</kbd><kbd>d</kbd> <code>+demo</code>.</p>
+
+    <h2>Link hints</h2>
+    <p>Press <kbd>f</kbd> to label every link in view and type a label to follow it; <kbd>F</kbd> opens it in a new
+      tab. A few links to try: <a href="#hints">hints</a>, <a href="#search">search</a>,
+      <a href="#sidebar">sidebar</a>, <a href="https://lazyvim.org">LazyVim</a>,
+      <a href="https://github.com/folke/which-key.nvim">which-key.nvim</a>,
+      <a href="https://github.com/folke/flash.nvim">flash.nvim</a>.</p>
+    <p><button type="button" id="demo-button">A button counts too</button></p>
+
+    <h2 id="search">Search</h2>
+    <p>Press <kbd>/</kbd> and type <em>keyboard</em>. Matches are painted with the CSS Custom Highlight API — the
+      page's DOM is never touched. <kbd>n</kbd> and <kbd>N</kbd> walk them; <code>:noh</code> stops painting.</p>
+    <p>The keyboard is the fastest pointer you own. A keyboard layer that answers questions is a keyboard layer for
+      everyone, not only for the person who wrote it.</p>
+
+    <h2 id="sidebar">The sidebar</h2>
+    <p><kbd>Space</kbd><kbd>e</kbd> opens the explorer — this demo feeds it a made-up site. <kbd>Tab</kbd> walks the
+      sources: explorer, outline (<kbd>go</kbd>), buffers (<kbd>Space</kbd><kbd>,</kbd>) and settings
+      (<kbd>Space</kbd><kbd>u</kbd><kbd>o</kbd>).</p>
+
+    <h2 id="hints">The command line</h2>
+    <p><kbd>:</kbd> opens a floating line. <kbd>Tab</kbd> completes. Try <code>:help</code>, <code>:set</code>,
+      <code>:set scroll=140</code>, <code>:set nostatusline</code>, <code>:set leader=,</code>,
+      <code>:checkhealth</code>, <code>:Lazy</code>, <code>:messages</code>, and this demo's own
+      <code>:hello {name}</code>.</p>
+
+    <h2>Insert mode</h2>
+    <p>While the caret is in a field every key belongs to it. <kbd>gi</kbd> jumps in, <kbd>Esc</kbd> leaves.</p>
+    <p><input type="text" placeholder="Type here freely: j k : / all stay text"></p>
+
+    <h2>Settings</h2>
+    <p>Everything is one schema, stored under <code>localStorage["lazykeys-demo:settings"]</code>. Reload the page:
+      what you changed stays changed.</p>
+    <p style="height: 60vh"></p>
+    <p>The end. <kbd>gg</kbd> takes you back to the top.</p>
+  </main>
+
+  <script src="../dist/lazykeys.iife.js"></script>
+  <script>
+    const pages = [
+      '/', '/blog/', '/blog/hello-world/', '/blog/modal-editing/', '/blog/which-key-for-the-web/',
+      '/projects/', '/projects/lazykeys/', '/about/', '/settings/',
+    ].map((path) => ({ path, title: path === '/' ? 'Home' : path.split('/').filter(Boolean).pop() }));
+
+    const lk = LazyKeys.setup({
+      namespace: 'lazykeys-demo',
+      eventName: 'demo:command',
+      // file:// has no site to go to; say where we would have gone instead.
+      navigate(url, { newTab }) {
+        if (url.startsWith('#')) { location.hash = url; return; }
+        lk.notify((newTab ? 'would open in a new tab: ' : 'would navigate to: ') + url, 'info');
+      },
+      plugins: [
+        {
+          name: 'demo',
+          keys: ({ lk }) => ({
+            '<leader> d': '+demo',
+            '<leader> d h': { desc: 'Say hello', run: () => lk.exec('hello world') },
+            '<leader> d t': { desc: 'Toggle LazyKeys', run: () => lk.toggle() },
+          }),
+          commands: ({ lk }) => [
+            {
+              name: 'hello',
+              args: '{name}',
+              desc: 'Greet someone',
+              run: (argv) => lk.notify('hello, ' + (argv.join(' ') || 'you') + '!', { level: 'success', title: 'demo' }),
+              complete: () => [{ value: 'world' }, { value: 'lazykeys' }],
+            },
+          ],
+          sources: [
+            LazyKeys.explorer({
+              load: () => pages,
+              rootLabel: 'site/',
+              fileName: (segment) => segment + '.md',
+              indexName: '_index.md',
+              // This file lives on disk; pretend it is a blog post.
+              current: () => '/blog/hello-world/',
+            }),
+          ],
+          statusline: [{ id: 'clock', order: 80, render: () => new Date().toTimeString().slice(0, 5) }],
+        },
+      ],
+    });
+
+    document.addEventListener('demo:command', (e) => console.log('demo:command', e.detail));
+    document.getElementById('demo-button').addEventListener('click', () => lk.notify('button clicked'));
+    const state = document.getElementById('toggle-state');
+    const show = () => { state.textContent = lk.isEnabled() ? '' : '— off: run LazyKeys again with the button below'; };
+    lk.on('enable', show);
+    lk.on('disable', () => {
+      show();
+      const again = document.createElement('button');
+      again.type = 'button';
+      again.textContent = 'Turn LazyKeys back on';
+      again.addEventListener('click', () => { lk.enable(); again.remove(); });
+      state.after(again);
+    });
+    window.lk = lk;
+  </script>
+</body>
+</html>
