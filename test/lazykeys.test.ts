@@ -407,6 +407,50 @@ describe('surfaces', () => {
   });
 });
 
+describe('sidebar sources by id', () => {
+  const tabs = () => Array.from(document.querySelectorAll('.lk-sb [role="tab"]')).map((n) => n.textContent);
+  const labels = () => Array.from(document.querySelectorAll('.lk-sb .lk-sb-label')).map((n) => n.textContent);
+
+  it('a source with an existing id replaces it, in its place, and comes back on removal', () => {
+    const k = make();
+    const off = k.register({
+      name: 'site',
+      sources: [{ id: 'buffers', label: 'Recent', order: 30, rows: () => [{ label: 'mine' }] }],
+    });
+    k.exec('buffers');
+    expect(tabs()).toEqual(['Outline', 'Recent', 'Settings']);
+    expect(labels()).toEqual(['mine']);
+    k.use<{ close(): void }>('sidebar')?.close();
+    off();
+    k.exec('buffers');
+    expect(tabs()).toEqual(['Outline', 'Buffers', 'Settings']);
+  });
+
+  it('`{ id: false }` removes a source, from a plugin or from options', () => {
+    const k = make({ sources: { settings: false } });
+    k.exec('outline');
+    expect(tabs()).toEqual(['Outline', 'Buffers']);
+    const off = k.register({ name: 'site', sources: { outline: false, things: { id: 'ignored', label: 'Things', rows: () => [] } } });
+    k.use<{ refresh(): void }>('sidebar')?.refresh();
+    expect(tabs()).toEqual(['Buffers', 'Things']);
+    off();
+    k.use<{ refresh(): void }>('sidebar')?.refresh();
+    expect(tabs()).toEqual(['Outline', 'Buffers']);
+  });
+
+  it('lk.source() adds, replaces and hides, and returns the removal', () => {
+    const k = make();
+    const hide = k.source('settings', false);
+    const add = k.source('explorer', explorer({ load: () => [{ path: '/a/' }] }));
+    k.exec('outline');
+    expect(tabs()).toEqual(['Explorer', 'Outline', 'Buffers']);
+    hide();
+    add();
+    k.use<{ refresh(): void }>('sidebar')?.refresh();
+    expect(tabs()).toEqual(['Outline', 'Buffers', 'Settings']);
+  });
+});
+
 describe('lk.redraw()', () => {
   it('re-renders status segments without touching the message', () => {
     vi.useFakeTimers();

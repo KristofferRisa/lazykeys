@@ -87,7 +87,7 @@ function createSidebar(ctx: PluginContext): SidebarApi & { destroy(): void } {
   let restoreFocus: Element | null = null;
   const openState = new Map<string, Map<string, boolean>>();
 
-  const sources = (): SidebarSource[] => [...lk._sources].sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
+  const sources = (): SidebarSource[] => [...lk._sources()].sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
   const sourceById = (id: string) => sources().find((s) => s.id === id);
   const labelOf = (s: SidebarSource) => s.label || t(`source.${s.id}`);
   const stateFor = (id: string) => {

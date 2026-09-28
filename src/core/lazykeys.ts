@@ -42,6 +42,7 @@ import type {
   PassthroughKey,
   PluginContext,
   PluginInfo,
+  PluginSources,
   PluginSpec,
   ResolvedOptions,
   Scroller,
@@ -174,7 +175,10 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   const pluginInfo: PluginInfo[] = [];
   const healthFns: Array<{ plugin: string; fn: () => HealthItem[] }> = [];
   const cleanups: Array<() => void> = [];
-  const sources: SidebarSource[] = [];
+  // Every source registration, in order. The live set is the last one per
+  // id — so registering an id again replaces it, and removing that
+  // registration brings the previous one back. `null` hides the id.
+  const sourceEntries: Array<{ id: string; source: SidebarSource | null }> = [];
   const segments: StatusSegment[] = [];
   let enabled = false;
   let destroyed = false;
@@ -199,6 +203,24 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     if (!set) listeners.set(event, (set = new Set()));
     set.add(fn as Listener);
     return () => set?.delete(fn as Listener);
+  }
+
+  function liveSources(): SidebarSource[] {
+    const byId = new Map<string, SidebarSource | null>();
+    for (const entry of sourceEntries) byId.set(entry.id, entry.source);
+    return [...byId.values()].filter((s): s is SidebarSource => s !== null);
+  }
+
+  /** Register (or hide, with `false`) a sidebar source by id. Returns its removal. */
+  function addSource(id: string, source: SidebarSource | false): () => void {
+    let live: SidebarSource | null = null;
+    if (source) live = source.id === id ? source : withId(source, id);
+    const entry = { id, source: live };
+    sourceEntries.push(entry);
+    return () => {
+      const at = sourceEntries.indexOf(entry);
+      if (at !== -1) sourceEntries.splice(at, 1);
+    };
   }
 
   function pushLayer(layer: KeyLayer): () => void {
@@ -523,13 +545,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
         const cmds = value(spec.commands, ctx) ?? [];
         for (const c of cmds) own.push(commands.add(c, spec.name));
         stage.commands = cmds.length;
-        for (const s of value(spec.sources, ctx) ?? []) {
-          sources.push(s);
-          own.push(() => {
-            const at = sources.indexOf(s);
-            if (at !== -1) sources.splice(at, 1);
-          });
-        }
+        for (const [id, s] of sourceList(value(spec.sources, ctx))) own.push(addSource(id, s));
         for (const seg of value(spec.statusline, ctx) ?? []) {
           segments.push(seg);
           own.push(() => {
@@ -598,7 +614,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   // The instance
   // -------------------------------------------------------------------------
   const instance: LazyKeys & {
-    /** @internal */ _sources: SidebarSource[];
+    /** @internal */ _sources(): SidebarSource[];
     /** @internal */ _segments: StatusSegment[];
     /** @internal */ _echo(): { text: string; level?: Level };
   } = {
@@ -611,7 +627,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     ui,
     options: opts,
     t,
-    _sources: sources,
+    _sources: liveSources,
     _segments: segments,
     _echo: () => echoState,
 
@@ -660,6 +676,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       return keymap.set(seq, spec, 'user');
     },
     command: (spec) => commands.add(spec, 'user'),
+    source: (id, source) => addSource(id, source),
     register(plugin) {
       unregister.get(plugin.name)?.();
       load([plugin], new Set());
@@ -722,8 +739,9 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   const builtins = builtinPlugins().filter((p) => !disabled.has(p.name) && !replaced.has(p.name));
 
   const tail: PluginSpec[] = [];
-  if (options.settings?.length || options.keys || options.commands?.length) {
+  if (options.settings?.length || options.keys || options.commands?.length || options.sources) {
     const user: PluginSpec = { name: 'user' };
+    if (options.sources) user.sources = options.sources;
     if (options.settings?.length) user.settings = options.settings;
     if (options.keys) user.keys = options.keys as Record<string, KeyMapping>;
     if (options.commands?.length) user.commands = options.commands;
@@ -753,8 +771,22 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   return instance;
 }
 
+/** A plugin's `sources`, as `[id, source | false]` pairs. */
+function sourceList(field: PluginSources | undefined): Array<[string, SidebarSource | false]> {
+  if (!field) return [];
+  if (Array.isArray(field)) return field.map((s) => [s.id, s]);
+  return Object.entries(field);
+}
+
+/** The same source under another id, without copying it (methods keep working). */
+function withId(source: SidebarSource, id: string): SidebarSource {
+  const out = Object.create(source) as SidebarSource;
+  Object.defineProperty(out, 'id', { value: id, enumerable: true });
+  return out;
+}
+
 export type InternalLazyKeys = LazyKeys & {
-  _sources: SidebarSource[];
+  _sources(): SidebarSource[];
   _segments: StatusSegment[];
   _echo(): { text: string; level?: Level };
 };

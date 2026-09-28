@@ -131,6 +131,9 @@ export interface HealthItem {
 
 type OrFn<T> = T | ((ctx: PluginContext) => T);
 
+/** A list of sources, or `{ id: source | false }` — `false` removes that id. */
+export type PluginSources = SidebarSource[] | Record<string, SidebarSource | false>;
+
 export interface PluginSpec {
   /** Unique. A plugin with a built-in's name replaces that built-in. */
   name: string;
@@ -142,8 +145,12 @@ export interface PluginSpec {
   commands?: OrFn<ExCommandSpec[]>;
   /** Setting rows. Defined before any plugin's keys or setup run. */
   settings?: OrFn<SettingSpec[]>;
-  /** Sidebar sources. */
-  sources?: OrFn<SidebarSource[]>;
+  /**
+   * Sidebar sources. A source whose id is already registered replaces it (and
+   * the old one comes back if this plugin is removed). The record form names
+   * ids, and `false` removes one: `{ settings: false, explorer: explorer(…) }`.
+   */
+  sources?: OrFn<PluginSources>;
   /** Status line segments. */
   statusline?: OrFn<StatusSegment[]>;
   /** Rows for `:checkhealth`. */
@@ -258,6 +265,8 @@ export interface LazyKeysOptions {
   keys?: Record<string, KeyMapping>;
   /** Extra or overriding ex commands. */
   commands?: ExCommandSpec[];
+  /** Extra, replacing (same id) or removed (`{ settings: false }`) sidebar sources. */
+  sources?: PluginSources;
   /** Your plugins. One named like a built-in replaces it. */
   plugins?: PluginSpec[];
   /** Built-in plugins to leave out, by name. */
@@ -370,6 +379,11 @@ export interface LazyKeys {
   map(seq: string, mapping: KeyMapping, desc?: string): () => void;
   /** Add an ex command. Returns its removal. */
   command(spec: ExCommandSpec): () => void;
+  /**
+   * Add a sidebar source under `id`, replacing one with that id, or hide that
+   * id with `false`. Returns its removal, which brings back what it replaced.
+   */
+  source(id: string, source: SidebarSource | false): () => void;
   /** Add a plugin after setup. Returns its removal. */
   register(plugin: PluginSpec): () => void;
   /** Run an ex line, as if typed after `:`. Returns false when nothing matched. */

@@ -244,6 +244,7 @@ createLazyKeys({
   settings: [],                   // extra setting rows
   keys: {},                       // extra / overriding bindings, applied last
   commands: [],                   // extra / overriding ex commands
+  sources: { settings: false },   // extra / replacing / removed sidebar sources, by id
   plugins: [],                    // your plugins; one named like a built-in replaces it
   disable: [],                    // built-ins to leave out: ['zen', 'yank']
   messages: {},                   // override any user-facing string
@@ -277,7 +278,7 @@ interface PluginSpec {
   keys?: Record<string, KeyMapping> | ((ctx) => …);   // bindings, '+group' strings, or false to unmap
   commands?: ExCommandSpec[] | ((ctx) => …);
   settings?: SettingSpec[] | ((ctx) => …);            // defined before any plugin's keys/setup run
-  sources?: SidebarSource[] | ((ctx) => …);
+  sources?: SidebarSource[] | Record<string, SidebarSource | false> | ((ctx) => …); // same id replaces; false removes
   statusline?: StatusSegment[] | ((ctx) => …);
   health?: (ctx) => HealthItem[];                      // rows for :checkhealth
   setup?(ctx): void | (() => void);                    // runs last; may return a cleanup
@@ -330,7 +331,7 @@ const site = definePlugin({
 const lk = createLazyKeys({ plugins: [site] });
 ```
 
-At runtime: `lk.map(seq, mapping, desc?)`, `lk.command(spec)` and `lk.register(plugin)` each return their own removal.
+At runtime: `lk.map(seq, mapping, desc?)`, `lk.command(spec)`, `lk.source(id, source | false)` and `lk.register(plugin)` each return their own removal.
 
 ### Services
 
@@ -391,6 +392,20 @@ explorer({
 ```
 
 It turns a flat list of URL paths into a folder tree: folders above files, a section's own page first, and the branch you are standing in open.
+
+### Replacing and removing sources
+
+Sources are keyed by `id`, the way plugins are keyed by name: **registering a source whose id is already there replaces it** (in the same tab position), and removing that registration brings the previous one back. `false` removes an id outright.
+
+```ts
+createLazyKeys({
+  sources: { settings: false },                        // no settings tab
+  plugins: [{ name: 'site', sources: [myBuffers] }],   // myBuffers.id === 'buffers': replaces the built-in
+});
+
+const off = lk.source('explorer', explorer({ load }));  // add or replace at runtime
+lk.source('outline', false);                            // hide one; each call returns its removal
+```
 
 ---
 
@@ -618,6 +633,7 @@ const lk = createLazyKeys(options);   // or LazyKeys.setup(options)
 lk.enable(); lk.disable(); lk.toggle(); lk.isEnabled(); lk.ownsKeys(); lk.destroy();
 lk.map('<leader> x', () => {}, 'Do x');      // → unmap()
 lk.command({ name: 'deploy', run() {} });    // → remove()
+lk.source('explorer', explorer({ load }));   // → remove(); false hides an id
 lk.register(plugin);                          // → unregister()
 lk.exec('set scroll=120');                    // run an ex line → boolean
 lk.feed('g g');                               // feed keys as if typed
