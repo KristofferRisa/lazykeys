@@ -1,0 +1,68 @@
+{
+  "name": "lazykeys",
+  "version": "0.1.0",
+  "description": "A LazyVim-shaped modal keyboard layer for any website: leader key with which-key, floating command line, link hints, / search and a neo-tree sidebar.",
+  "license": "MIT",
+  "author": "Kristoffer Risa (https://kristoffer.dev)",
+  "homepage": "https://github.com/KristofferRisa/lazykeys#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KristofferRisa/lazykeys.git"
+  },
+  "bugs": "https://github.com/KristofferRisa/lazykeys/issues",
+  "keywords": [
+    "vim",
+    "lazyvim",
+    "keyboard",
+    "keybindings",
+    "which-key",
+    "modal",
+    "hotkeys",
+    "accessibility"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css",
+    "./dist/lazykeys.iife.js"
+  ],
+  "main": "./dist/lazykeys.js",
+  "module": "./dist/lazykeys.js",
+  "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/lazykeys.iife.js",
+  "jsdelivr": "./dist/lazykeys.iife.js",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/lazykeys.js",
+      "default": "./dist/lazykeys.js"
+    },
+    "./iife": "./dist/lazykeys.iife.js",
+    "./lazykeys.css": "./dist/lazykeys.css",
+    "./css": "./dist/lazykeys.css",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p test/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^20.14.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  },
+  "packageManager": "pnpm@11.8.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
