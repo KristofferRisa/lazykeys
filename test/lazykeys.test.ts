@@ -102,6 +102,23 @@ describe('createLazyKeys', () => {
     expect(k.mode()).toBe('normal');
   });
 
+  it('passthrough keys pass only at the start of a sequence', () => {
+    const run = vi.fn();
+    const top = vi.fn();
+    const k = make({ passthrough: ['`', 'C-f'], keys: { '<leader> `': run, '`': top, 'g C-f': run } });
+    expect(press('`').defaultPrevented).toBe(false); // the page's terminal keeps it
+    expect(top).not.toHaveBeenCalled();
+    expect(press(' ').defaultPrevented).toBe(true);
+    expect(press('`').defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(1);
+    press('g');
+    expect(press('f', { ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+    press('5');
+    expect(press('f', { ctrlKey: true }).defaultPrevented).toBe(false); // a count alone is not a sequence yet
+    expect(k.dispatcher.busy).toBe(false);
+  });
+
   it('yields to consumer guards', () => {
     let open = true;
     const k = make({ yieldTo: [() => open] });
@@ -365,6 +382,23 @@ describe('surfaces', () => {
     expect(sb.classList.contains('is-open')).toBe(false);
   });
 
+  it('the outline drops permalink anchors, never the heading text', () => {
+    document.querySelector('main')!.innerHTML = `
+      <h2 id="c">Learning C#</h2>
+      <h2 id="d">Sections §<a hidden class="anchor" aria-hidden="true" href="#d">#</a></h2>
+      <h2 id="e">Docs <a class="headerlink" href="#e">¶</a></h2>
+      <h2 id="f">Custom <span class="pin">🔗</span></h2>`;
+    const k = make();
+    k.exec('outline');
+    const labels = Array.from(document.querySelectorAll('.lk-sb-label')).map((n) => n.textContent);
+    expect(labels).toEqual(['Learning C#', 'Sections §', 'Docs', 'Custom 🔗']);
+    expect(document.querySelectorAll('main a').length).toBe(2); // the page is untouched
+    k.destroy();
+    lk = null;
+    make({ headingIgnore: '.pin' }).exec('outline');
+    expect(Array.from(document.querySelectorAll('.lk-sb-label')).at(-1)?.textContent).toBe('Custom');
+  });
+
   it('the settings source flips a switch', () => {
     const k = make();
     k.exec('options');
@@ -404,6 +438,193 @@ describe('surfaces', () => {
     k.exec('set nostatusline');
     vi.advanceTimersByTime(20);
     expect(document.querySelector('.lk-status')).toBeNull();
+  });
+});
+
+describe('sidebar sources by id', () => {
+  const tabs = () => Array.from(document.querySelectorAll('.lk-sb [role="tab"]')).map((n) => n.textContent);
+  const labels = () => Array.from(document.querySelectorAll('.lk-sb .lk-sb-label')).map((n) => n.textContent);
+
+  it('a source with an existing id replaces it, in its place, and comes back on removal', () => {
+    const k = make();
+    const off = k.register({
+      name: 'site',
+      sources: [{ id: 'buffers', label: 'Recent', order: 30, rows: () => [{ label: 'mine' }] }],
+    });
+    k.exec('buffers');
+    expect(tabs()).toEqual(['Outline', 'Recent', 'Settings']);
+    expect(labels()).toEqual(['mine']);
+    k.use<{ close(): void }>('sidebar')?.close();
+    off();
+    k.exec('buffers');
+    expect(tabs()).toEqual(['Outline', 'Buffers', 'Settings']);
+  });
+
+  it('`{ id: false }` removes a source, from a plugin or from options', () => {
+    const k = make({ sources: { settings: false } });
+    k.exec('outline');
+    expect(tabs()).toEqual(['Outline', 'Buffers']);
+    const off = k.register({ name: 'site', sources: { outline: false, things: { id: 'ignored', label: 'Things', rows: () => [] } } });
+    k.use<{ refresh(): void }>('sidebar')?.refresh();
+    expect(tabs()).toEqual(['Buffers', 'Things']);
+    off();
+    k.use<{ refresh(): void }>('sidebar')?.refresh();
+    expect(tabs()).toEqual(['Outline', 'Buffers']);
+  });
+
+  it('lk.source() adds, replaces and hides, and returns the removal', () => {
+    const k = make();
+    const hide = k.source('settings', false);
+    const add = k.source('explorer', explorer({ load: () => [{ path: '/a/' }] }));
+    k.exec('outline');
+    expect(tabs()).toEqual(['Explorer', 'Outline', 'Buffers']);
+    hide();
+    add();
+    k.use<{ refresh(): void }>('sidebar')?.refresh();
+    expect(tabs()).toEqual(['Outline', 'Buffers', 'Settings']);
+  });
+});
+
+describe('the enabled setting', () => {
+  it('is :set lazy by default, so :set nolazy turns LazyKeys off', () => {
+    const k = make();
+    expect(k.settings.row('lazy')?.key).toBe('enabled');
+    expect(k.exec('set nolazy')).toBe(true);
+    expect(k.isEnabled()).toBe(false);
+    k.settings.set('enabled', true);
+    expect(k.isEnabled()).toBe(true);
+    expect(k.complete('set nola').map((c) => c.value)).toContain('set nolazy');
+  });
+
+  it('takes another name, or none', () => {
+    const k = make({ enabledOption: 'vim' });
+    k.exec('set novim');
+    expect(k.isEnabled()).toBe(false);
+    k.destroy();
+    const j = make({ enabledOption: false });
+    expect(j.settings.row('enabled')?.option).toBeUndefined();
+    j.exec('set nolazy');
+    expect(j.isEnabled()).toBe(true);
+  });
+
+  it('shows in the settings source', () => {
+    make({ messages: { 'setting.enabled': 'Tastaturlaget' } });
+    lk!.exec('options');
+    const labels = Array.from(document.querySelectorAll('.lk-sb-label')).map((n) => n.textContent);
+    expect(labels[0]).toBe('Tastaturlaget');
+  });
+});
+
+describe('setting labels from messages', () => {
+  it('name and explain rows without a label, including redefined built-ins', () => {
+    const k = make({
+      messages: {
+        'setting.mood.label': 'Stemning',
+        'setting.mood.help': 'Hvordan siden føles.',
+        'setting.enabled': 'Tastaturlaget',
+        'setting.enabled.help': 'Hele laget.',
+      },
+      plugins: [
+        {
+          name: 'site',
+          settings: [
+            { key: 'mood', option: 'mood', type: 'enum', values: ['calm', 'loud'], default: 'calm' },
+            { key: 'enabled', option: 'lazy', type: 'boolean', default: true },
+            { key: 'own', option: 'own', type: 'boolean', default: true, label: 'Mine' },
+          ],
+        },
+      ],
+    });
+    k.exec('options');
+    const rows = Array.from(document.querySelectorAll('.lk-sb-row'));
+    const label = (r: Element) => r.querySelector('.lk-sb-label')?.textContent;
+    const mood = rows.find((r) => label(r) === 'Stemning');
+    expect(mood?.getAttribute('title')).toBe('Hvordan siden føles.');
+    const on = rows.find((r) => label(r) === 'Tastaturlaget');
+    expect(on?.getAttribute('title')).toBe('Hele laget.');
+    expect(rows.some((r) => label(r) === 'Mine')).toBe(true);
+    expect(k.complete('set moo').find((c) => c.value === 'set mood')?.hint).toBe('Stemning');
+  });
+});
+
+describe('Esc in a field (escapeInFields)', () => {
+  const field = () => document.getElementById('field') as HTMLInputElement;
+
+  it("'page' (default): the page's handler goes first and wins by preventing default", () => {
+    const k = make();
+    let focusedWhenPageSawIt = false;
+    const clear = (e: KeyboardEvent) => {
+      focusedWhenPageSawIt = document.activeElement === field();
+      if (field().value) {
+        field().value = '';
+        e.preventDefault();
+      }
+    };
+    field().addEventListener('keydown', clear);
+    field().value = 'draft';
+    field().focus();
+    press('Escape', {}, field());
+    expect(focusedWhenPageSawIt).toBe(true);
+    expect(document.activeElement).toBe(field()); // the page cleared it and kept the caret
+    expect(k.mode()).toBe('insert');
+    press('Escape', {}, field()); // now empty: nobody takes Esc, so it leaves the field
+    expect(document.activeElement).not.toBe(field());
+    expect(k.mode()).toBe('normal');
+  });
+
+  it("'page': a handler that stops propagation keeps the field too", () => {
+    make();
+    document.querySelector('main')!.addEventListener('keydown', (e) => e.stopPropagation());
+    field().focus();
+    press('Escape', {}, field());
+    expect(document.activeElement).toBe(field());
+  });
+
+  it("'blur' leaves the field before the page hears Esc (the 0.1.0 behaviour)", () => {
+    const k = make({ escapeInFields: 'blur' });
+    let focusedWhenPageSawIt = true;
+    field().addEventListener('keydown', (e) => {
+      focusedWhenPageSawIt = document.activeElement === field();
+      e.preventDefault();
+    });
+    field().focus();
+    press('Escape', {}, field());
+    expect(focusedWhenPageSawIt).toBe(false);
+    expect(k.mode()).toBe('normal');
+  });
+
+  it("'keep' never touches Esc in a field", () => {
+    const k = make({ escapeInFields: 'keep' });
+    field().focus();
+    press('Escape', {}, field());
+    expect(document.activeElement).toBe(field());
+    expect(k.mode()).toBe('insert');
+  });
+});
+
+describe('lk.redraw()', () => {
+  it('re-renders status segments without touching the message', () => {
+    vi.useFakeTimers();
+    let mood = 'calm';
+    const k = make({
+      plugins: [{ name: 'site', statusline: [{ id: 'mood', order: 80, render: () => mood }] }],
+    });
+    vi.advanceTimersByTime(20);
+    k.echo('3 matches');
+    vi.advanceTimersByTime(20);
+    expect(document.querySelector('.lk-seg--mood')?.textContent).toBe('calm');
+    mood = 'loud';
+    k.redraw();
+    vi.advanceTimersByTime(20);
+    expect(document.querySelector('.lk-seg--mood')?.textContent).toBe('loud');
+    expect(document.querySelector('.lk-seg--message')?.textContent).toBe('3 matches');
+  });
+
+  it('is a no-op after destroy()', () => {
+    const k = make();
+    k.destroy();
+    lk = null;
+    expect(() => k.redraw()).not.toThrow();
   });
 });
 

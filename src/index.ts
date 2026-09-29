@@ -20,7 +20,7 @@ export { ExRegistry, parseLine } from './core/ex';
 export type { Completion, ExCommand, ExCommandSpec, ExContext, ParsedLine } from './core/ex';
 export { Settings, localStorageAdapter, memoryAdapter } from './core/settings';
 export type { SettingSpec, SettingType, SettingValue, SettingsListener, StorageAdapter } from './core/settings';
-export { applySet, formatOption, parseSetArg, resolveOption } from './core/set';
+export { applySet, formatOption, parseSetArg, resolveOption, settingHelp, settingLabel } from './core/set';
 export type { SetArg, SetOp, SetResult } from './core/set';
 export { labelsFor } from './core/labels';
 export { LEADER, displaySeq, isEditable, keyName, normalizeSeq, normalizeToken, parseSeq, tokenDisplay } from './core/keys';

@@ -56,7 +56,7 @@ It started life as the vim mode on [kristoffer.dev](https://kristoffer.dev) and 
 lazykeys is not on npm; install it from GitHub. `dist/` is committed, so no build step runs on install.
 
 ```sh
-pnpm add github:KristofferRisa/lazykeys#v0.1.0
+pnpm add github:KristofferRisa/lazykeys#v0.1.1
 ```
 
 ```ts
@@ -73,8 +73,8 @@ That is the whole setup. Press <kbd>Space</kbd> and wait.
 Copy `dist/lazykeys.iife.js` and `dist/lazykeys.css` into your site (or load them from jsDelivr), and call `LazyKeys.setup()`:
 
 ```html
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.0/dist/lazykeys.css">
-<script src="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.0/dist/lazykeys.iife.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.1/dist/lazykeys.css">
+<script src="https://cdn.jsdelivr.net/gh/KristofferRisa/lazykeys@v0.1.1/dist/lazykeys.iife.js"></script>
 <script>
   const lk = LazyKeys.setup({ enabled: true });
 </script>
@@ -165,7 +165,7 @@ Group labels are also declared for `g` (goto), `y` (yank), `Z` (quit), `[` (prev
 
 ### Left alone on purpose
 
-<kbd>Ctrl-F</kbd> (native find stays native) and <kbd>Ctrl-K</kbd> are passed through by default (`passthrough`), and every <kbd>Cmd</kbd>/<kbd>Alt</kbd> combination always belongs to the browser. Keys LazyKeys does not map are never prevented.
+<kbd>Ctrl-F</kbd> (native find stays native) and <kbd>Ctrl-K</kbd> are passed through by default (`passthrough`) — a passthrough key is only left alone where it would start a sequence, so it can still appear inside one — and every <kbd>Cmd</kbd>/<kbd>Alt</kbd> combination always belongs to the browser. Keys LazyKeys does not map are never prevented.
 
 ---
 
@@ -226,7 +226,7 @@ Every row below appears under `:set`, in the sidebar's settings source, and is w
 | `smoothscroll` | `smoothscroll` | off | animate motions (forced off under `prefers-reduced-motion`) |
 | `hlsearch` | `hlsearch` | on | paint every match, not just the current one |
 | `ignorecase` | `ignorecase` | on | with smartcase: an uppercase letter in the pattern means you meant it |
-| — | `enabled` | `true` | whether LazyKeys is on (`options.enabled` sets the default; `:q` and `ZZ` write it) |
+| `lazy` | `enabled` | `true` | whether LazyKeys is on: `:set nolazy` turns it off (`options.enabled` sets the default, `enabledOption` renames the option or, with `false`, keeps it out of `:set`; `:q` and `ZZ` write it too) |
 
 ---
 
@@ -237,22 +237,26 @@ Everything is optional.
 ```ts
 createLazyKeys({
   enabled: true,                  // default of the `enabled` setting
+  enabledOption: 'lazy',          // its :set name (:set nolazy); false = none
   persist: true,                  // enable()/disable() write that setting
+  escapeInFields: 'page',         // Esc in a field: 'page' handlers first, then blur | 'blur' | 'keep'
   namespace: 'lazykeys',          // storage keys: lazykeys:settings, lazykeys:marks, …
   storage: localStorageAdapter(), // where settings live
   defaults: { leader: ',' },      // override setting defaults
   settings: [],                   // extra setting rows
   keys: {},                       // extra / overriding bindings, applied last
   commands: [],                   // extra / overriding ex commands
+  sources: { settings: false },   // extra / replacing / removed sidebar sources, by id
   plugins: [],                    // your plugins; one named like a built-in replaces it
   disable: [],                    // built-ins to leave out: ['zen', 'yank']
   messages: {},                   // override any user-facing string
   yieldTo: [],                    // stand down while any returns true
-  passthrough: ['C-f', 'C-k'],    // never take these keys
+  passthrough: ['C-f', 'C-k'],    // never start a sequence with these keys
   eventName: undefined,           // also dispatch commands as this DOM event
   navigate: (url, { newTab }) => {}, // SPA routers
   root: 'main',                   // what / searches and the outline reads (falls back to body)
   headings: 'h1, h2, h3, h4',     // outline source
+  headingIgnore: 'a.anchor, …',   // elements the outline drops from heading labels (permalinks)
   sections: 'h2, h3',             // targets of { and } (string or () => Element[])
   hintTargets: 'a[href], button:not([disabled]), …', // what f labels
   exclude: '#my-terminal, .cookie-banner', // chrome that / and f ignore
@@ -277,7 +281,7 @@ interface PluginSpec {
   keys?: Record<string, KeyMapping> | ((ctx) => …);   // bindings, '+group' strings, or false to unmap
   commands?: ExCommandSpec[] | ((ctx) => …);
   settings?: SettingSpec[] | ((ctx) => …);            // defined before any plugin's keys/setup run
-  sources?: SidebarSource[] | ((ctx) => …);
+  sources?: SidebarSource[] | Record<string, SidebarSource | false> | ((ctx) => …); // same id replaces; false removes
   statusline?: StatusSegment[] | ((ctx) => …);
   health?: (ctx) => HealthItem[];                      // rows for :checkhealth
   setup?(ctx): void | (() => void);                    // runs last; may return a cleanup
@@ -330,7 +334,7 @@ const site = definePlugin({
 const lk = createLazyKeys({ plugins: [site] });
 ```
 
-At runtime: `lk.map(seq, mapping, desc?)`, `lk.command(spec)` and `lk.register(plugin)` each return their own removal.
+At runtime: `lk.map(seq, mapping, desc?)`, `lk.command(spec)`, `lk.source(id, source | false)` and `lk.register(plugin)` each return their own removal.
 
 ### Services
 
@@ -376,7 +380,7 @@ interface SidebarRow {
 }
 ```
 
-The built-ins are **outline** (headings under `root`, as document symbols), **buffers** (pages visited this session) and **settings** (the schema). The **explorer** is yours to feed, because only the site knows its pages:
+The built-ins are **outline** (headings under `root`, as document symbols — permalink anchors inside a heading are left out of its label by element, never by stripping characters, so "Learning C#" stays whole; `headingIgnore` sets which elements, by default `a.anchor`, `a.headerlink`, `a.header-anchor`, `a.heading-anchor`, `a.hash-link`, `[aria-hidden="true"]` and `[hidden]`), **buffers** (pages visited this session) and **settings** (the schema). The **explorer** is yours to feed, because only the site knows its pages:
 
 ```ts
 import { explorer } from 'lazykeys';
@@ -386,11 +390,33 @@ explorer({
   rootLabel: 'content/',
   fileName: (segment) => segment + '.md',  // how a leaf page is named
   indexName: '_index.md',                   // how a section's own page is named
-  current: () => location.pathname,         // "you are here"
+  current: () => location.pathname + location.search, // "you are here" (the default)
 });
 ```
 
 It turns a flat list of URL paths into a folder tree: folders above files, a section's own page first, and the branch you are standing in open.
+
+The query string is part of a page's identity: `/repo?slug=a` and `/repo?slug=b` are two entries, shown as `repo?slug=a` and `repo?slug=b` unless an entry brings its own `label` (the hash is ignored). "You are here" matches the path and query first, then the bare path, so `/search/?q=vim` still lights up `/search/`.
+
+```ts
+explorer({
+  load: async () => (await listRepos()).map((r) => ({ path: `/repo?slug=${r.slug}`, label: r.name, title: r.summary })),
+});
+```
+
+### Replacing and removing sources
+
+Sources are keyed by `id`, the way plugins are keyed by name: **registering a source whose id is already there replaces it** (in the same tab position), and removing that registration brings the previous one back. `false` removes an id outright.
+
+```ts
+createLazyKeys({
+  sources: { settings: false },                        // no settings tab
+  plugins: [{ name: 'site', sources: [myBuffers] }],   // myBuffers.id === 'buffers': replaces the built-in
+});
+
+const off = lk.source('explorer', explorer({ load }));  // add or replace at runtime
+lk.source('outline', false);                            // hide one; each call returns its removal
+```
 
 ---
 
@@ -407,6 +433,12 @@ interface StatusSegment {
 ```
 
 Return text or nodes you built (`h()` and `icon()` are exported); nothing is parsed as HTML. The segment element gets `lk-seg lk-seg--<id>`. It redraws on mode changes, pending keys, messages, settings changes and scroll (coalesced to one frame).
+
+When something only your segment knows about changes — a mood, a row cursor, a value fetched after load — call `lk.redraw()`. It asks for one frame of the status line and leaves the message segment as it is:
+
+```ts
+document.addEventListener('site:mood', () => lk.redraw());
+```
 
 ---
 
@@ -472,6 +504,17 @@ createLazyKeys({
 
 Your own plugins can use `ctx.t('your.key')` with keys you add to `messages` too.
 
+**Setting rows are named from `messages` when they do not name themselves.** A row without a `label` is called `messages['setting.<key>.label']`, else `messages['setting.<key>']`, else its key; a row without `help` gets `messages['setting.<key>.help']`. That covers your own rows and a built-in row you redefine (say, to give `enabled` another `:set` name) without restating its label:
+
+```ts
+createLazyKeys({
+  messages: { 'setting.mood.label': 'Stemning', 'setting.mood.help': 'Hvordan siden føles.' },
+  settings: [{ key: 'mood', option: 'mood', type: 'enum', values: ['calm', 'loud'], default: 'calm' }],
+});
+```
+
+`settingLabel(row, t)` and `settingHelp(row, t)` are exported for plugins that draw rows themselves.
+
 ---
 
 ## Guards and yielding
@@ -481,12 +524,15 @@ The order a key press is offered to things:
 1. LazyKeys is off, or an IME is composing → **the page's**.
 2. Any `yieldTo` guard returns true → **the page's**. Pass one per widget that owns the keyboard while open: `yieldTo: [() => terminal.isOpen(), () => palette.isOpen()]`, or add one later with `lk.yieldTo(fn)`.
 3. A LazyKeys surface is up (command line, float, sidebar, hints) → **that surface's**.
-4. The caret is in a field (`input`, `textarea`, `select`, `contenteditable`) → **the field's**. That is insert mode; <kbd>Esc</kbd> blurs the field and returns to normal.
+4. The caret is in a field (`input`, `textarea`, `select`, `contenteditable`) → **the field's**. That is insert mode. <kbd>Esc</kbd> follows `escapeInFields`:
+   - `'page'` (default) — the page's own Esc handlers run first (a search box that clears itself, a form that cancels). If none of them calls `preventDefault()` or stops propagation, LazyKeys then blurs the field and returns to normal mode.
+   - `'blur'` — blur at once, in the capture phase, before the page hears the key (the 0.1.0 behaviour).
+   - `'keep'` — Esc in a field is never touched.
 5. Already `defaultPrevented`, or <kbd>Cmd</kbd>/<kbd>Alt</kbd> held → **the page's**.
-6. A `passthrough` key (default <kbd>Ctrl-F</kbd>, <kbd>Ctrl-K</kbd>) → **the browser's**.
+6. A `passthrough` key (default <kbd>Ctrl-F</kbd>, <kbd>Ctrl-K</kbd>) that would *start* a sequence → **the browser's**. Inside a sequence it is an ordinary key, so a site can pass <kbd>`</kbd> through to its own terminal and still map `<leader> \``.
 7. Otherwise → **the dispatcher's**. Only keys it takes are `preventDefault()`ed.
 
-The listener is on `document` in the capture phase. Other key handlers can ask `lk.ownsKeys()` — true while LazyKeys is on and not yielding — to give up a bare key of their own (kristoffer.dev's presenter hands `p` over this way).
+The listener is on `document` in the capture phase (plus one on `window`, in the bubble phase, for `escapeInFields: 'page'`). Other key handlers can ask `lk.ownsKeys()` — true while LazyKeys is on and not yielding — to give up a bare key of their own (kristoffer.dev's presenter hands `p` over this way).
 
 ---
 
@@ -514,7 +560,7 @@ Inside JavaScript, `lk.on(event, fn)` returns an unsubscribe:
 | `echo` | `{ text, level? }` — the status line's message |
 | `escape` | — (Esc in normal mode) |
 | `navigate` | — (`refresh()` was called) |
-| `render` | — (something the status line shows changed) |
+| `render` | — (something the status line shows changed; `lk.redraw()` emits it too) |
 
 ---
 
@@ -544,6 +590,10 @@ All styling is `--lk-*` custom properties with tokyonight-ish dark defaults, dec
 }
 ```
 
+Set them wherever your own tokens live. If your dark mode or themes are classes on `body` (`body.dark`, `body.theme-x`), set the `--lk-*` tokens on `body` too — a `var()` resolves where it is declared, so a mapping on `:root` would only ever see the `:root` values.
+
+**Derived tokens follow the accent wherever you set it.** `--lk-focus`, `--lk-mode-normal`, `--lk-mode-insert`, `--lk-mode-cmdline`, `--lk-mode-hints` and `--lk-hint-bg` are not declared on `:root` at all; each is read as `var(--lk-focus, var(--lk-accent))` (and so on) at the element that uses it. Setting `--lk-accent` on `body` is enough for the focus rings and the NORMAL block to follow it — there is no need to restate them. Set one explicitly only to make it differ from what it derives from.
+
 | Token | Default | Used for |
 | --- | --- | --- |
 | `--lk-font` | system monospace stack | everything LazyKeys draws |
@@ -559,10 +609,10 @@ All styling is `--lk-*` custom properties with tokyonight-ish dark defaults, dec
 | `--lk-accent` | `#7aa2f7` | titles, selection, keys |
 | `--lk-accent-fg` | `#1a1b26` | text on accent |
 | `--lk-accent-soft` | `rgb(122 162 247 / .16)` | selected rows |
-| `--lk-focus` | `var(--lk-accent)` | focus rings |
+| `--lk-focus` | falls back to `--lk-accent` (resolved at the element) | focus rings |
 | `--lk-green` `--lk-yellow` `--lk-orange` `--lk-red` `--lk-blue` `--lk-purple` | tokyonight | levels, groups |
-| `--lk-mode-normal` / `-insert` / `-cmdline` / `-hints` | accent / green / yellow / orange | the mode block |
-| `--lk-hint-bg` / `--lk-hint-fg` | yellow / dark | link hint labels (new-tab hints use `--lk-purple`) |
+| `--lk-mode-normal` / `-insert` / `-cmdline` / `-hints` | fall back to accent / green / yellow / orange (resolved at the element) | the mode block |
+| `--lk-hint-bg` / `--lk-hint-fg` | falls back to yellow / dark | link hint labels (new-tab hints use `--lk-purple`) |
 | `--lk-search-bg` / `--lk-search-fg` | translucent yellow / inherit | every match |
 | `--lk-search-current-bg` / `--lk-search-current-fg` | orange / dark | the current match |
 | `--lk-radius` / `--lk-radius-sm` | `10px` / `5px` | corners |
@@ -608,6 +658,7 @@ const lk = createLazyKeys(options);   // or LazyKeys.setup(options)
 lk.enable(); lk.disable(); lk.toggle(); lk.isEnabled(); lk.ownsKeys(); lk.destroy();
 lk.map('<leader> x', () => {}, 'Do x');      // → unmap()
 lk.command({ name: 'deploy', run() {} });    // → remove()
+lk.source('explorer', explorer({ load }));   // → remove(); false hides an id
 lk.register(plugin);                          // → unregister()
 lk.exec('set scroll=120');                    // run an ex line → boolean
 lk.feed('g g');                               // feed keys as if typed
@@ -618,6 +669,7 @@ lk.use<SidebarApi>('sidebar')?.open('outline');
 lk.mode(); lk.setMode('insert'); lk.leader(); // '<space>'
 lk.navigate('/about/', { newTab: false });
 lk.refresh();                                  // after an SPA navigation
+lk.redraw();                                   // redraw the status line (keeps the message)
 lk.yieldTo(() => dialog.open);                 // → remove()
 lk.plugins(); lk.health(); lk.messages(); lk.complete('se'); lk.exCommands();
 lk.keymap; lk.commands; lk.settings; lk.dispatcher; lk.scroll; lk.ui; lk.t;

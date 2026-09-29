@@ -50,12 +50,12 @@ function openSetList(ctx: PluginContext): void {
 
 export const core = definePlugin({
   name: 'core',
-  settings: ({ t }) => [
+  settings: ({ t, options }) => [
     {
       key: 'enabled',
+      ...(options.enabledOption ? { option: options.enabledOption } : {}),
       type: 'boolean',
       default: true,
-      hidden: true,
       group: t('settings.group'),
       label: t('setting.enabled'),
       help: t('setting.enabled.help'),
@@ -123,7 +123,7 @@ export const core = definePlugin({
           if (failed) lk.echo(failed.message, 'error');
           else if (last) lk.echo(last.message, last.changed ? 'success' : undefined);
         },
-        complete: () => setCompletions(settings),
+        complete: () => setCompletions(settings, t),
       },
       {
         name: 'quit',

@@ -110,6 +110,8 @@ export interface HealthItem {
     detail?: string;
 }
 type OrFn<T> = T | ((ctx: PluginContext) => T);
+/** A list of sources, or `{ id: source | false }` — `false` removes that id. */
+export type PluginSources = SidebarSource[] | Record<string, SidebarSource | false>;
 export interface PluginSpec {
     /** Unique. A plugin with a built-in's name replaces that built-in. */
     name: string;
@@ -121,8 +123,12 @@ export interface PluginSpec {
     commands?: OrFn<ExCommandSpec[]>;
     /** Setting rows. Defined before any plugin's keys or setup run. */
     settings?: OrFn<SettingSpec[]>;
-    /** Sidebar sources. */
-    sources?: OrFn<SidebarSource[]>;
+    /**
+     * Sidebar sources. A source whose id is already registered replaces it (and
+     * the old one comes back if this plugin is removed). The record form names
+     * ids, and `false` removes one: `{ settings: false, explorer: explorer(…) }`.
+     */
+    sources?: OrFn<PluginSources>;
     /** Status line segments. */
     statusline?: OrFn<StatusSegment[]>;
     /** Rows for `:checkhealth`. */
@@ -209,8 +215,22 @@ export interface PassthroughKey {
 export interface LazyKeysOptions {
     /** The default of the `enabled` setting — whether LazyKeys starts on. Default true. */
     enabled?: boolean;
+    /**
+     * The `:set` name of the `enabled` setting: `:set nolazy` turns LazyKeys
+     * off. Default `'lazy'`; `false` keeps it out of `:set`.
+     */
+    enabledOption?: string | false;
     /** Whether enable()/disable() write the `enabled` setting. Default true. */
     persist?: boolean;
+    /**
+     * Esc while the caret is in a field.
+     * - `'page'` (default): the page's own Esc handlers run first; if none of
+     *   them called `preventDefault()` or stopped propagation, the field is left
+     *   and LazyKeys is back in normal mode.
+     * - `'blur'`: leave the field at once, before the page hears the key (0.1.0).
+     * - `'keep'`: never touch Esc in a field.
+     */
+    escapeInFields?: 'page' | 'blur' | 'keep';
     /** Prefix for every storage key (`lazykeys:settings`, `lazykeys:marks`, …). */
     namespace?: string;
     /** Where settings live. Default: namespaced localStorage. */
@@ -223,6 +243,8 @@ export interface LazyKeysOptions {
     keys?: Record<string, KeyMapping>;
     /** Extra or overriding ex commands. */
     commands?: ExCommandSpec[];
+    /** Extra, replacing (same id) or removed (`{ settings: false }`) sidebar sources. */
+    sources?: PluginSources;
     /** Your plugins. One named like a built-in replaces it. */
     plugins?: PluginSpec[];
     /** Built-in plugins to leave out, by name. */
@@ -231,7 +253,11 @@ export interface LazyKeysOptions {
     messages?: MessageOverrides;
     /** LazyKeys stands down while any of these returns true. */
     yieldTo?: Array<() => boolean>;
-    /** Keys never taken, even when mapped. Default `['C-f', 'C-k']`. Cmd/Alt combos always pass. */
+    /**
+     * Keys never taken to start a sequence, even when mapped. Default `['C-f', 'C-k']`.
+     * Inside a sequence they are ordinary keys, so `<leader> \`` works with `\`` passed
+     * through. Cmd/Alt combos always pass.
+     */
     passthrough?: Array<string | PassthroughKey>;
     /** Also dispatch every command as this event (same detail as `lazykeys:command`). */
     eventName?: string;
@@ -241,6 +267,13 @@ export interface LazyKeysOptions {
     root?: string | (() => Element | null);
     /** Headings for the outline source. Default `'h1, h2, h3, h4'` inside the root. */
     headings?: string;
+    /**
+     * Elements inside a heading the outline leaves out of its label — permalink
+     * anchors. Default `'a.anchor, a.headerlink, a.header-anchor,
+     * a.heading-anchor, a.hash-link, [aria-hidden="true"], [hidden]'`; `''` keeps
+     * everything. Text is never stripped, so "Learning C#" stays whole.
+     */
+    headingIgnore?: string;
     /** Targets of `{` and `}`. Default `'h2, h3'` inside the root, else the headings. */
     sections?: string | (() => Element[]);
     /** What `f` labels. */
@@ -260,13 +293,16 @@ export interface LazyKeysOptions {
 }
 export interface ResolvedOptions {
     enabled: boolean;
+    enabledOption: string | null;
     persist: boolean;
+    escapeInFields: 'page' | 'blur' | 'keep';
     namespace: string;
     passthrough: PassthroughKey[];
     eventName: string | null;
     navigate: (url: string, opts: NavigateOptions) => void;
     root: () => Element;
     headings: string;
+    headingIgnore: string;
     sections: () => Element[];
     hintTargets: string;
     exclude: string;
@@ -330,6 +366,11 @@ export interface LazyKeys {
     map(seq: string, mapping: KeyMapping, desc?: string): () => void;
     /** Add an ex command. Returns its removal. */
     command(spec: ExCommandSpec): () => void;
+    /**
+     * Add a sidebar source under `id`, replacing one with that id, or hide that
+     * id with `false`. Returns its removal, which brings back what it replaced.
+     */
+    source(id: string, source: SidebarSource | false): () => void;
     /** Add a plugin after setup. Returns its removal. */
     register(plugin: PluginSpec): () => void;
     /** Run an ex line, as if typed after `:`. Returns false when nothing matched. */
@@ -352,6 +393,11 @@ export interface LazyKeys {
     navigate(url: string, opts?: NavigateOptions): void;
     /** Call after an SPA navigation: closes surfaces, records the page, redraws. */
     refresh(): void;
+    /**
+     * Redraw the status line (coalesced to one frame): call it when something a
+     * segment of yours renders changed. It leaves the message segment alone.
+     */
+    redraw(): void;
     /** Stand down while `fn()` returns true. Returns its removal. */
     yieldTo(fn: () => boolean): () => void;
     plugins(): PluginInfo[];

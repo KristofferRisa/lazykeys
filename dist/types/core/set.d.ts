@@ -37,8 +37,17 @@ export declare function resolveOption(settings: Settings, name: string): {
 } | null;
 /** Apply every argument of a `:set` line. One result per argument. */
 export declare function applySet(settings: Settings, argv: string[], t: Translate): SetResult[];
+/**
+ * What a setting row is called: its own `label`, else the message
+ * `setting.<key>.label`, else `setting.<key>`, else the key. So `messages`
+ * names rows that do not name themselves — including a built-in row a
+ * consumer redefines without a label.
+ */
+export declare function settingLabel(row: SettingSpec, t?: Translate): string;
+/** A setting row's help: its own `help`, else the message `setting.<key>.help`. */
+export declare function settingHelp(row: SettingSpec, t?: Translate): string | undefined;
 /** Completion pool for `:set`: every option, and `no…` for the booleans. */
-export declare function setCompletions(settings: Settings): Array<{
+export declare function setCompletions(settings: Settings, t?: Translate): Array<{
     value: string;
     hint: string;
 }>;

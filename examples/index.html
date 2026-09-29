@@ -89,7 +89,7 @@
     <h2 id="hints">The command line</h2>
     <p><kbd>:</kbd> opens a floating line. <kbd>Tab</kbd> completes. Try <code>:help</code>, <code>:set</code>,
       <code>:set scroll=140</code>, <code>:set nostatusline</code>, <code>:set leader=,</code>,
-      <code>:checkhealth</code>, <code>:Lazy</code>, <code>:messages</code>, and this demo's own
+      <code>:checkhealth</code>, <code>:Lazy</code>, <code>:messages</code>, <code>:set nolazy</code>, and this demo's own
       <code>:hello {name}</code>.</p>
 
     <h2>Insert mode</h2>
@@ -163,6 +163,8 @@
       again.addEventListener('click', () => { lk.enable(); again.remove(); });
       state.after(again);
     });
+    // Only the page knows the minute changed: ask the status line to redraw.
+    setInterval(() => lk.redraw(), 15000);
     window.lk = lk;
   </script>
 </body>

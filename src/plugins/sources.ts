@@ -3,6 +3,7 @@
  * explorer factory a site feeds its own page list into.
  */
 
+import { settingHelp, settingLabel } from '../core/set';
 import type { PluginContext, SidebarRow, SidebarSource } from '../types';
 import { isExcluded } from './util';
 
@@ -11,8 +12,14 @@ import { isExcluded } from './util';
 // ---------------------------------------------------------------------------
 
 export interface ExplorerEntry {
-  /** A URL path (`/blog/my-post/`) or a full URL on this origin. */
+  /**
+   * A URL path (`/blog/my-post/`, `/repo?slug=a`) or a full URL on this
+   * origin. The query string is part of the page's identity, so
+   * `/repo?slug=a` and `/repo?slug=b` are two entries; the hash is not.
+   */
   path: string;
+  /** The name shown in the tree. Default: the file name, plus the query string if there is one. */
+  label?: string;
   title?: string;
   /** A section with nothing under it is still a section, not a file. */
   dir?: boolean;
@@ -29,7 +36,11 @@ export interface ExplorerOptions {
   fileName?(segment: string, entry: ExplorerEntry): string;
   /** The name a section's own page shows as inside its folder. Default `'index'`. */
   indexName?: string;
-  /** The path to mark as "you are here". Default `location.pathname`. */
+  /**
+   * The path to mark as "you are here". Default `location.pathname +
+   * location.search`; when no entry has that query string, the entry for the
+   * bare path is marked instead.
+   */
   current?(): string;
   order?: number;
 }
@@ -42,16 +53,40 @@ interface TreeNode {
   open?: boolean;
 }
 
+/** A page's identity in the tree: path and query string, no origin, no hash. */
 function pathOf(input: string): string {
   try {
-    return new URL(input, location.href).pathname;
+    const url = new URL(input, location.href);
+    return url.pathname + url.search;
   } catch {
-    return input;
+    return input.split('#')[0] as string;
   }
 }
 
+function splitPath(path: string): { pathname: string; search: string } {
+  const at = path.indexOf('?');
+  return at === -1 ? { pathname: path, search: '' } : { pathname: path.slice(0, at), search: path.slice(at) };
+}
+
 function segmentsOf(path: string): string[] {
-  return path.replace(/^\/+|\/+$/g, '').split('/').filter(Boolean);
+  return splitPath(path)
+    .pathname.replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter(Boolean);
+}
+
+const hereByDefault = (): string => location.pathname + location.search;
+
+/**
+ * The entry "you are here" is: the exact path and query first, then the bare
+ * path — so `?utm_source=…` or a search box's `?q=` does not lose its place.
+ * Null when the page is not in the list at all.
+ */
+function resolveCurrent(keys: string[], here: string): string | null {
+  const exact = pathOf(here);
+  if (keys.includes(exact)) return exact;
+  const bare = splitPath(exact).pathname;
+  return keys.includes(bare) ? bare : null;
 }
 
 /**
@@ -97,6 +132,7 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
 
   for (const entry of list) {
     const segs = segmentsOf(entry.path);
+    const { search } = splitPath(entry.path);
     const own = '/' + segs.join('/');
     let parent: TreeNode;
     let name: string;
@@ -110,7 +146,7 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
       parent = dirFor(segs.slice(0, -1));
       name = fileName(segs[segs.length - 1] as string, entry);
     }
-    const leaf: TreeNode = { label: name, path: entry.path };
+    const leaf: TreeNode = { label: entry.label ?? name + search, path: entry.path };
     if (entry.title) leaf.hint = entry.title;
     parent.children!.push(leaf);
   }
@@ -128,7 +164,7 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
   };
   sortNode(root);
 
-  const here = segmentsOf(opts.current ? opts.current() : location.pathname);
+  const here = segmentsOf(opts.current ? opts.current() : hereByDefault());
   let walk = '';
   for (const seg of here) {
     walk += '/' + seg;
@@ -136,6 +172,14 @@ export function buildTree(entries: ExplorerEntry[], opts: Omit<ExplorerOptions, 
     if (node) node.open = true;
   }
   return root;
+}
+
+function leafPaths(node: TreeNode, out: string[] = []): string[] {
+  for (const child of node.children ?? []) {
+    if (child.children) leafPaths(child, out);
+    else out.push(child.path);
+  }
+  return out;
 }
 
 function toRows(node: TreeNode, current: string): SidebarRow[] {
@@ -169,18 +213,21 @@ export function explorer(options: ExplorerOptions): SidebarSource {
           .then(() => options.load())
           .catch(() => [] as ExplorerEntry[])
           .then((entries) => {
-            const current = options.current ? options.current() : location.pathname;
+            const here = options.current ? options.current() : hereByDefault();
             const all = entries.slice();
             // Whatever page this is, it is in the tree, so "you are here" has
             // something to highlight.
-            if (!all.some((e) => pathOf(e.path) === current)) all.push({ path: current, title: document.title });
+            if (resolveCurrent(all.map((e) => pathOf(e.path)), here) === null) {
+              all.push({ path: pathOf(here), title: document.title });
+            }
             return buildTree(all, options);
           });
       }
-      const current = options.current ? options.current() : location.pathname;
-      return cache.then((root) => [
-        { id: '/#root', label: root.label, kind: 'dir', open: true, children: toRows(root, current) } as SidebarRow,
-      ]);
+      return cache.then((root) => {
+        const here = options.current ? options.current() : hereByDefault();
+        const current = resolveCurrent(leafPaths(root), here) ?? pathOf(here);
+        return [{ id: '/#root', label: root.label, kind: 'dir', open: true, children: toRows(root, current) } as SidebarRow];
+      });
     },
     reload() {
       cache = null;
@@ -191,6 +238,25 @@ export function explorer(options: ExplorerOptions): SidebarSource {
 // ---------------------------------------------------------------------------
 // Outline — the headings of the page you are on, as document symbols
 // ---------------------------------------------------------------------------
+
+/**
+ * A heading's text without its permalink anchors: the elements matching
+ * `ignore` are dropped from a detached copy, so the page is not touched and
+ * a trailing `#` in the words themselves ("Learning C#") stays.
+ */
+export function headingText(el: Element, ignore: string): string {
+  let text = el.textContent ?? '';
+  if (ignore) {
+    try {
+      const copy = el.cloneNode(true) as Element;
+      copy.querySelectorAll(ignore).forEach((node) => node.remove());
+      text = copy.textContent ?? '';
+    } catch {
+      /* an invalid selector: keep the whole text */
+    }
+  }
+  return text.replace(/\s+/g, ' ').trim();
+}
 
 export function outlineSource(ctx: PluginContext): SidebarSource {
   return {
@@ -209,7 +275,7 @@ export function outlineSource(ctx: PluginContext): SidebarSource {
         kind: 'symbol' as const,
         icon: 'hash',
         depth: (levels[i] as number) - min,
-        label: (el.textContent ?? '').replace(/\s*[¶#§]\s*$/, '').trim(),
+        label: headingText(el, ctx.options.headingIgnore),
         hint: el.tagName.toLowerCase(),
         onSelect() {
           ctx.lk.scroll.to(ctx.lk.scroll.offsetOf(el) - 16);
@@ -286,21 +352,22 @@ export function settingsSource(ctx: PluginContext): SidebarSource {
             const at = row.values.indexOf(String(now));
             settings.set(row.key, row.values[(at + dir + row.values.length) % row.values.length]);
           } else if (row.type === 'number') settings.set(row.key, Number(now) + (row.step ?? 1) * dir);
-          else lk.echo(t('sidebar.textSetting', { label: row.label ?? row.key, option: row.option ?? row.key }), 'warn');
+          else lk.echo(t('sidebar.textSetting', { label: settingLabel(row, t), option: row.option ?? row.key }), 'warn');
         };
         const item: SidebarRow = {
           id: 'setting:' + row.key,
           kind: 'option',
           icon: 'gear',
           depth: group ? 1 : 0,
-          label: row.label ?? row.key,
+          label: settingLabel(row, t),
           dormant: !!(requires && !settings.get(requires.key)),
           onCycle: cycle,
           onSelect: () => cycle(1),
         };
         if (row.type === 'boolean') item.toggled = !!value;
         else item.value = String(value);
-        if (row.help) item.hint = row.help;
+        const help = settingHelp(row, t);
+        if (help) item.hint = help;
         out.push(item);
       }
       return out;

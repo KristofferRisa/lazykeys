@@ -1,3 +1,4 @@
+import { settingLabel } from '../core/set';
 import type { PluginContext, PluginSpec } from '../types';
 
 /** Identity, for type inference: `definePlugin({ name, keys, … })`. */
@@ -12,7 +13,7 @@ export function toggleSetting(ctx: PluginContext, key: string): void {
   if (value === undefined) return;
   ctx.lk.echo(
     ctx.t('msg.toggled', {
-      label: row?.label ?? key,
+      label: row ? settingLabel(row, ctx.t) : key,
       state: ctx.t(value ? 'msg.on.short' : 'msg.off.short'),
     }),
     'success',

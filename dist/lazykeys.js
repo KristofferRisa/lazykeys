@@ -1,4 +1,4 @@
-/*! lazykeys v0.1.0 | MIT | https://github.com/KristofferRisa/lazykeys */
+/*! lazykeys v0.1.1 | MIT | https://github.com/KristofferRisa/lazykeys */
 
 // src/core/keys.ts
 var LEADER = "<leader>";
@@ -1336,6 +1336,93 @@ function createUi(deps) {
   };
 }
 
+// src/core/set.ts
+function parseSetArg(arg) {
+  const text = arg.trim();
+  const eq = text.search(/[=:]/);
+  if (eq > 0) {
+    return { name: text.slice(0, eq), op: "assign", value: text.slice(eq + 1) };
+  }
+  if (text.endsWith("?")) return { name: text.slice(0, -1), op: "ask" };
+  if (text.endsWith("!")) return { name: text.slice(0, -1), op: "toggle" };
+  return { name: text, op: "on" };
+}
+function formatOption(row, value) {
+  const name = row.option ?? row.key;
+  if (row.type === "boolean") return (value ? "  " : "no") + name;
+  return "  " + name + "=" + String(value);
+}
+function resolveOption(settings, name) {
+  const direct = settings.row(name);
+  if (direct?.option) return { row: direct, negated: false, inverted: false };
+  if (name.startsWith("no")) {
+    const row = settings.row(name.slice(2));
+    if (row?.option) return { row, negated: true, inverted: false };
+  }
+  if (name.startsWith("inv")) {
+    const row = settings.row(name.slice(3));
+    if (row?.option) return { row, negated: false, inverted: true };
+  }
+  return null;
+}
+function applySet(settings, argv, t) {
+  return argv.map((arg) => {
+    const parsed = parseSetArg(arg);
+    const found = resolveOption(settings, parsed.name);
+    if (!found) return { ok: false, message: t("set.unknown", { name: parsed.name }) };
+    const { row, negated, inverted } = found;
+    const show = () => formatOption(row, settings.get(row.key)).trim();
+    if (parsed.op === "ask") return { ok: true, message: show() };
+    if (parsed.op === "assign") {
+      if (negated || inverted) return { ok: false, message: t("set.invalid", { arg }) };
+      const check = settings.validate(row, parsed.value ?? "");
+      if (!check.ok) {
+        if (check.error === "number") return { ok: false, message: t("set.number", { arg }) };
+        if (check.error === "enum") {
+          return {
+            ok: false,
+            message: t("set.values", { arg, values: (row.values ?? []).join(", ") })
+          };
+        }
+        return { ok: false, message: t("set.invalid", { arg }) };
+      }
+      settings.set(row.key, check.value);
+      return { ok: true, message: show(), changed: true };
+    }
+    if (row.type !== "boolean") {
+      if (parsed.op === "on" && !negated && !inverted) return { ok: true, message: show() };
+      return { ok: false, message: t("set.invalid", { arg }) };
+    }
+    if (parsed.op === "toggle" || inverted) settings.toggle(row.key);
+    else settings.set(row.key, !negated);
+    return { ok: true, message: show(), changed: true };
+  });
+}
+function message(t, key) {
+  if (!t) return void 0;
+  const text = t(key);
+  return text === key ? void 0 : text;
+}
+function settingLabel(row, t) {
+  return row.label ?? message(t, `setting.${row.key}.label`) ?? message(t, `setting.${row.key}`) ?? row.key;
+}
+function settingHelp(row, t) {
+  return row.help ?? message(t, `setting.${row.key}.help`);
+}
+function setCompletions(settings, t) {
+  const pool = [];
+  for (const row of settings.schema()) {
+    if (!row.option) continue;
+    const hint = settingLabel(row, t);
+    pool.push({ value: row.option, hint });
+    if (row.type === "boolean") pool.push({ value: "no" + row.option, hint });
+    if (row.type === "enum") {
+      for (const v of row.values ?? []) pool.push({ value: `${row.option}=${v}`, hint });
+    }
+  }
+  return pool;
+}
+
 // src/plugins/util.ts
 function definePlugin(spec) {
   return spec;
@@ -1346,7 +1433,7 @@ function toggleSetting(ctx, key) {
   if (value === void 0) return;
   ctx.lk.echo(
     ctx.t("msg.toggled", {
-      label: row?.label ?? key,
+      label: row ? settingLabel(row, ctx.t) : key,
       state: ctx.t(value ? "msg.on.short" : "msg.off.short")
     }),
     "success"
@@ -1720,83 +1807,8 @@ var cmdline = definePlugin({
   }
 });
 
-// src/core/set.ts
-function parseSetArg(arg) {
-  const text = arg.trim();
-  const eq = text.search(/[=:]/);
-  if (eq > 0) {
-    return { name: text.slice(0, eq), op: "assign", value: text.slice(eq + 1) };
-  }
-  if (text.endsWith("?")) return { name: text.slice(0, -1), op: "ask" };
-  if (text.endsWith("!")) return { name: text.slice(0, -1), op: "toggle" };
-  return { name: text, op: "on" };
-}
-function formatOption(row, value) {
-  const name = row.option ?? row.key;
-  if (row.type === "boolean") return (value ? "  " : "no") + name;
-  return "  " + name + "=" + String(value);
-}
-function resolveOption(settings, name) {
-  const direct = settings.row(name);
-  if (direct?.option) return { row: direct, negated: false, inverted: false };
-  if (name.startsWith("no")) {
-    const row = settings.row(name.slice(2));
-    if (row?.option) return { row, negated: true, inverted: false };
-  }
-  if (name.startsWith("inv")) {
-    const row = settings.row(name.slice(3));
-    if (row?.option) return { row, negated: false, inverted: true };
-  }
-  return null;
-}
-function applySet(settings, argv, t) {
-  return argv.map((arg) => {
-    const parsed = parseSetArg(arg);
-    const found = resolveOption(settings, parsed.name);
-    if (!found) return { ok: false, message: t("set.unknown", { name: parsed.name }) };
-    const { row, negated, inverted } = found;
-    const show = () => formatOption(row, settings.get(row.key)).trim();
-    if (parsed.op === "ask") return { ok: true, message: show() };
-    if (parsed.op === "assign") {
-      if (negated || inverted) return { ok: false, message: t("set.invalid", { arg }) };
-      const check = settings.validate(row, parsed.value ?? "");
-      if (!check.ok) {
-        if (check.error === "number") return { ok: false, message: t("set.number", { arg }) };
-        if (check.error === "enum") {
-          return {
-            ok: false,
-            message: t("set.values", { arg, values: (row.values ?? []).join(", ") })
-          };
-        }
-        return { ok: false, message: t("set.invalid", { arg }) };
-      }
-      settings.set(row.key, check.value);
-      return { ok: true, message: show(), changed: true };
-    }
-    if (row.type !== "boolean") {
-      if (parsed.op === "on" && !negated && !inverted) return { ok: true, message: show() };
-      return { ok: false, message: t("set.invalid", { arg }) };
-    }
-    if (parsed.op === "toggle" || inverted) settings.toggle(row.key);
-    else settings.set(row.key, !negated);
-    return { ok: true, message: show(), changed: true };
-  });
-}
-function setCompletions(settings) {
-  const pool = [];
-  for (const row of settings.schema()) {
-    if (!row.option) continue;
-    pool.push({ value: row.option, hint: row.label ?? row.key });
-    if (row.type === "boolean") pool.push({ value: "no" + row.option, hint: row.label ?? row.key });
-    if (row.type === "enum") {
-      for (const v of row.values ?? []) pool.push({ value: `${row.option}=${v}`, hint: row.label ?? row.key });
-    }
-  }
-  return pool;
-}
-
 // src/version.ts
-var VERSION = "0.1.0";
+var VERSION = "0.1.1";
 
 // src/plugins/core.ts
 function storageWorks(kind) {
@@ -1834,12 +1846,12 @@ function openSetList(ctx) {
 }
 var core = definePlugin({
   name: "core",
-  settings: ({ t }) => [
+  settings: ({ t, options }) => [
     {
       key: "enabled",
+      ...options.enabledOption ? { option: options.enabledOption } : {},
       type: "boolean",
       default: true,
-      hidden: true,
       group: t("settings.group"),
       label: t("setting.enabled"),
       help: t("setting.enabled.help")
@@ -1904,7 +1916,7 @@ var core = definePlugin({
           if (failed) lk.echo(failed.message, "error");
           else if (last) lk.echo(last.message, last.changed ? "success" : void 0);
         },
-        complete: () => setCompletions(settings)
+        complete: () => setCompletions(settings, t)
       },
       {
         name: "quit",
@@ -2715,27 +2727,27 @@ function createNotifier(ctx) {
     timers.add(timer);
   }
   return {
-    show(message, opts = {}) {
+    show(message2, opts = {}) {
       if (ctx.settings.get("notify") === false) return false;
       const parent = ensure();
       const toast = h(
         "div",
         {
           class: "lk-toast",
-          attrs: { "data-level": message.level },
+          attrs: { "data-level": message2.level },
           on: { click: () => dismiss(toast) }
         },
         [
-          ctx.ui.icon(LEVEL_ICON[message.level] ?? "info"),
+          ctx.ui.icon(LEVEL_ICON[message2.level] ?? "info"),
           h("div", { class: "lk-toast-text" }, [
-            message.title ? h("b", { text: message.title }) : null,
-            h("span", { text: message.message })
+            message2.title ? h("b", { text: message2.title }) : null,
+            h("span", { text: message2.message })
           ])
         ]
       );
       parent.appendChild(toast);
       while (parent.children.length > 5 && parent.firstChild) parent.removeChild(parent.firstChild);
-      const timeout = opts.timeout ?? (message.level === "error" ? 6e3 : 3800);
+      const timeout = opts.timeout ?? (message2.level === "error" ? 6e3 : 3800);
       if (timeout > 0) {
         const timer = setTimeout(() => {
           timers.delete(timer);
@@ -2805,13 +2817,25 @@ var notifier = definePlugin({
 // src/plugins/sources.ts
 function pathOf(input) {
   try {
-    return new URL(input, location.href).pathname;
+    const url = new URL(input, location.href);
+    return url.pathname + url.search;
   } catch {
-    return input;
+    return input.split("#")[0];
   }
 }
+function splitPath(path) {
+  const at = path.indexOf("?");
+  return at === -1 ? { pathname: path, search: "" } : { pathname: path.slice(0, at), search: path.slice(at) };
+}
 function segmentsOf(path) {
-  return path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+  return splitPath(path).pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+}
+var hereByDefault = () => location.pathname + location.search;
+function resolveCurrent(keys, here) {
+  const exact = pathOf(here);
+  if (keys.includes(exact)) return exact;
+  const bare = splitPath(exact).pathname;
+  return keys.includes(bare) ? bare : null;
 }
 function buildTree(entries, opts = {}) {
   const indexName = opts.indexName ?? "index";
@@ -2848,6 +2872,7 @@ function buildTree(entries, opts = {}) {
   };
   for (const entry of list) {
     const segs = segmentsOf(entry.path);
+    const { search } = splitPath(entry.path);
     const own = "/" + segs.join("/");
     let parent;
     let name;
@@ -2861,7 +2886,7 @@ function buildTree(entries, opts = {}) {
       parent = dirFor(segs.slice(0, -1));
       name = fileName(segs[segs.length - 1], entry);
     }
-    const leaf = { label: name, path: entry.path };
+    const leaf = { label: entry.label ?? name + search, path: entry.path };
     if (entry.title) leaf.hint = entry.title;
     parent.children.push(leaf);
   }
@@ -2877,7 +2902,7 @@ function buildTree(entries, opts = {}) {
     node.children?.forEach((c) => c.children && sortNode(c));
   };
   sortNode(root);
-  const here = segmentsOf(opts.current ? opts.current() : location.pathname);
+  const here = segmentsOf(opts.current ? opts.current() : hereByDefault());
   let walk = "";
   for (const seg of here) {
     walk += "/" + seg;
@@ -2885,6 +2910,13 @@ function buildTree(entries, opts = {}) {
     if (node) node.open = true;
   }
   return root;
+}
+function leafPaths(node, out = []) {
+  for (const child of node.children ?? []) {
+    if (child.children) leafPaths(child, out);
+    else out.push(child.path);
+  }
+  return out;
 }
 function toRows(node, current) {
   return (node.children ?? []).map((child) => {
@@ -2912,21 +2944,36 @@ function explorer(options) {
     rows() {
       if (!cache) {
         cache = Promise.resolve().then(() => options.load()).catch(() => []).then((entries) => {
-          const current2 = options.current ? options.current() : location.pathname;
+          const here = options.current ? options.current() : hereByDefault();
           const all = entries.slice();
-          if (!all.some((e) => pathOf(e.path) === current2)) all.push({ path: current2, title: document.title });
+          if (resolveCurrent(all.map((e) => pathOf(e.path)), here) === null) {
+            all.push({ path: pathOf(here), title: document.title });
+          }
           return buildTree(all, options);
         });
       }
-      const current = options.current ? options.current() : location.pathname;
-      return cache.then((root) => [
-        { id: "/#root", label: root.label, kind: "dir", open: true, children: toRows(root, current) }
-      ]);
+      return cache.then((root) => {
+        const here = options.current ? options.current() : hereByDefault();
+        const current = resolveCurrent(leafPaths(root), here) ?? pathOf(here);
+        return [{ id: "/#root", label: root.label, kind: "dir", open: true, children: toRows(root, current) }];
+      });
     },
     reload() {
       cache = null;
     }
   };
+}
+function headingText(el, ignore) {
+  let text = el.textContent ?? "";
+  if (ignore) {
+    try {
+      const copy = el.cloneNode(true);
+      copy.querySelectorAll(ignore).forEach((node) => node.remove());
+      text = copy.textContent ?? "";
+    } catch {
+    }
+  }
+  return text.replace(/\s+/g, " ").trim();
 }
 function outlineSource(ctx) {
   return {
@@ -2945,7 +2992,7 @@ function outlineSource(ctx) {
         kind: "symbol",
         icon: "hash",
         depth: levels[i] - min,
-        label: (el.textContent ?? "").replace(/\s*[¶#§]\s*$/, "").trim(),
+        label: headingText(el, ctx.options.headingIgnore),
         hint: el.tagName.toLowerCase(),
         onSelect() {
           ctx.lk.scroll.to(ctx.lk.scroll.offsetOf(el) - 16);
@@ -3005,21 +3052,22 @@ function settingsSource(ctx) {
             const at = row.values.indexOf(String(now));
             settings.set(row.key, row.values[(at + dir + row.values.length) % row.values.length]);
           } else if (row.type === "number") settings.set(row.key, Number(now) + (row.step ?? 1) * dir);
-          else lk.echo(t("sidebar.textSetting", { label: row.label ?? row.key, option: row.option ?? row.key }), "warn");
+          else lk.echo(t("sidebar.textSetting", { label: settingLabel(row, t), option: row.option ?? row.key }), "warn");
         };
         const item = {
           id: "setting:" + row.key,
           kind: "option",
           icon: "gear",
           depth: group2 ? 1 : 0,
-          label: row.label ?? row.key,
+          label: settingLabel(row, t),
           dormant: !!(requires && !settings.get(requires.key)),
           onCycle: cycle,
           onSelect: () => cycle(1)
         };
         if (row.type === "boolean") item.toggled = !!value;
         else item.value = String(value);
-        if (row.help) item.hint = row.help;
+        const help2 = settingHelp(row, t);
+        if (help2) item.hint = help2;
         out.push(item);
       }
       return out;
@@ -3074,7 +3122,7 @@ function createSidebar(ctx) {
   let pop = null;
   let restoreFocus = null;
   const openState = /* @__PURE__ */ new Map();
-  const sources = () => [...lk._sources].sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
+  const sources = () => [...lk._sources()].sort((a, b) => (a.order ?? 50) - (b.order ?? 50));
   const sourceById = (id) => sources().find((s) => s.id === id);
   const labelOf = (s) => s.label || t(`source.${s.id}`);
   const stateFor = (id) => {
@@ -3851,6 +3899,15 @@ function builtinPlugins() {
 // src/core/lazykeys.ts
 var COMMAND_EVENT = "lazykeys:command";
 var DEFAULT_PASSTHROUGH = ["C-f", "C-k"];
+var DEFAULT_HEADING_IGNORE = [
+  "a.anchor",
+  "a.headerlink",
+  "a.header-anchor",
+  "a.heading-anchor",
+  "a.hash-link",
+  '[aria-hidden="true"]',
+  "[hidden]"
+].join(", ");
 function resolveOptions(o) {
   const rootOpt = o.root ?? "main";
   const root = () => {
@@ -3869,7 +3926,9 @@ function resolveOptions(o) {
   );
   return {
     enabled: o.enabled ?? true,
+    enabledOption: o.enabledOption === false ? null : o.enabledOption ?? "lazy",
     persist: o.persist ?? true,
+    escapeInFields: o.escapeInFields ?? "page",
     namespace: o.namespace ?? "lazykeys",
     passthrough,
     eventName: o.eventName ?? null,
@@ -3879,6 +3938,7 @@ function resolveOptions(o) {
     }),
     root,
     headings,
+    headingIgnore: o.headingIgnore ?? DEFAULT_HEADING_IGNORE,
     sections,
     hintTargets: o.hintTargets ?? [
       "a[href]",
@@ -3901,6 +3961,10 @@ function resolveOptions(o) {
     }),
     mount: o.mount ?? (() => document.body ?? document.documentElement)
   };
+}
+function originOf(e) {
+  const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+  return path[0] ?? e.target;
 }
 function createSession(namespace) {
   const store = () => {
@@ -3952,7 +4016,7 @@ function createLazyKeys(options = {}) {
   const pluginInfo = [];
   const healthFns = [];
   const cleanups = [];
-  const sources = [];
+  const sourceEntries = [];
   const segments = [];
   let enabled = false;
   let destroyed = false;
@@ -3975,6 +4039,21 @@ function createLazyKeys(options = {}) {
     if (!set) listeners.set(event, set = /* @__PURE__ */ new Set());
     set.add(fn);
     return () => set?.delete(fn);
+  }
+  function liveSources() {
+    const byId = /* @__PURE__ */ new Map();
+    for (const entry of sourceEntries) byId.set(entry.id, entry.source);
+    return [...byId.values()].filter((s) => s !== null);
+  }
+  function addSource(id, source) {
+    let live = null;
+    if (source) live = source.id === id ? source : withId(source, id);
+    const entry = { id, source: live };
+    sourceEntries.push(entry);
+    return () => {
+      const at = sourceEntries.indexOf(entry);
+      if (at !== -1) sourceEntries.splice(at, 1);
+    };
   }
   function pushLayer(layer) {
     layers.push(layer);
@@ -4031,26 +4110,26 @@ function createLazyKeys(options = {}) {
       return Math.round(y / max * 100) + "%";
     }
   };
-  function notify(message, o) {
-    if (!message) return;
+  function notify(message2, o) {
+    if (!message2) return;
     const nopts = typeof o === "string" ? { level: o } : o ?? {};
-    const entry = { at: /* @__PURE__ */ new Date(), level: nopts.level ?? "info", message };
+    const entry = { at: /* @__PURE__ */ new Date(), level: nopts.level ?? "info", message: message2 };
     if (nopts.title) entry.title = nopts.title;
     log.push(entry);
     if (log.length > 100) log.shift();
     const shown = services.get("notifier");
-    if (!(shown && shown.show(entry, nopts))) ui.announce(message);
+    if (!(shown && shown.show(entry, nopts))) ui.announce(message2);
     emit("message", entry);
   }
-  function echo(message, level) {
-    echoState = level ? { text: message ?? "", level } : { text: message ?? "" };
+  function echo(message2, level) {
+    echoState = level ? { text: message2 ?? "", level } : { text: message2 ?? "" };
     if (echoTimer) clearTimeout(echoTimer);
     echoTimer = null;
     emit("echo", echoState);
     emit("render", void 0);
-    if (!message) return;
-    if (level) notify(message, { level });
-    else ui.announce(message);
+    if (!message2) return;
+    if (level) notify(message2, { level });
+    else ui.announce(message2);
     echoTimer = setTimeout(() => {
       echoState = { text: "" };
       emit("echo", echoState);
@@ -4127,10 +4206,9 @@ function createLazyKeys(options = {}) {
       }
       return;
     }
-    const path = typeof e.composedPath === "function" ? e.composedPath() : [];
-    const origin = path[0] ?? e.target;
+    const origin = originOf(e);
     if (isEditable(origin)) {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && opts.escapeInFields === "blur") {
         origin.blur?.();
         setMode("normal");
         return;
@@ -4143,8 +4221,11 @@ function createLazyKeys(options = {}) {
     const token = keyName(e);
     if (!token) return;
     if (opts.passthrough.some((p) => p.key === token)) {
-      dispatcher.reset();
-      return;
+      const state = dispatcher.state;
+      if (!state.keys.length && !state.awaitingArg) {
+        dispatcher.reset();
+        return;
+      }
     }
     if (token === "Escape") {
       const consumed = dispatcher.feed("Escape", e);
@@ -4154,6 +4235,15 @@ function createLazyKeys(options = {}) {
       return;
     }
     if (dispatcher.feed(token, e)) e.preventDefault();
+  }
+  function onEscapeAfter(e) {
+    if (opts.escapeInFields !== "page" || e.key !== "Escape" || e.defaultPrevented) return;
+    if (!enabled || destroyed || e.isComposing || layers.length || yielding()) return;
+    const origin = originOf(e);
+    if (!isEditable(origin)) return;
+    if (origin.closest?.("[data-lazykeys]")) return;
+    origin.blur?.();
+    setMode("normal");
   }
   function onFocusIn(e) {
     if (!enabled || layers.length) return;
@@ -4247,13 +4337,7 @@ function createLazyKeys(options = {}) {
         const cmds = value(spec.commands, ctx) ?? [];
         for (const c of cmds) own.push(commands.add(c, spec.name));
         stage.commands = cmds.length;
-        for (const s of value(spec.sources, ctx) ?? []) {
-          sources.push(s);
-          own.push(() => {
-            const at = sources.indexOf(s);
-            if (at !== -1) sources.splice(at, 1);
-          });
-        }
+        for (const [id, s] of sourceList(value(spec.sources, ctx))) own.push(addSource(id, s));
         for (const seg of value(spec.statusline, ctx) ?? []) {
           segments.push(seg);
           own.push(() => {
@@ -4325,7 +4409,7 @@ function createLazyKeys(options = {}) {
     ui,
     options: opts,
     t,
-    _sources: sources,
+    _sources: liveSources,
     _segments: segments,
     _echo: () => echoState,
     enable() {
@@ -4356,6 +4440,7 @@ function createLazyKeys(options = {}) {
       document.removeEventListener("keydown", onKeydown, true);
       document.removeEventListener("focusin", onFocusIn, true);
       document.removeEventListener("focusout", onFocusOut, true);
+      window.removeEventListener("keydown", onEscapeAfter);
       for (const undo of cleanups.splice(0).reverse()) undo();
       if (echoTimer) clearTimeout(echoTimer);
       ui.destroy();
@@ -4371,6 +4456,7 @@ function createLazyKeys(options = {}) {
       return keymap.set(seq, spec, "user");
     },
     command: (spec) => commands.add(spec, "user"),
+    source: (id, source) => addSource(id, source),
     register(plugin) {
       unregister.get(plugin.name)?.();
       load([plugin], /* @__PURE__ */ new Set());
@@ -4401,6 +4487,9 @@ function createLazyKeys(options = {}) {
       emit("navigate", void 0);
       emit("render", void 0);
     },
+    redraw() {
+      if (!destroyed) emit("render", void 0);
+    },
     yieldTo(fn) {
       guards.add(fn);
       return () => guards.delete(fn);
@@ -4421,8 +4510,9 @@ function createLazyKeys(options = {}) {
   const replaced = new Set(userPlugins.map((p) => p.name));
   const builtins2 = builtinPlugins().filter((p) => !disabled.has(p.name) && !replaced.has(p.name));
   const tail = [];
-  if (options.settings?.length || options.keys || options.commands?.length) {
+  if (options.settings?.length || options.keys || options.commands?.length || options.sources) {
     const user = { name: "user" };
+    if (options.sources) user.sources = options.sources;
     if (options.settings?.length) user.settings = options.settings;
     if (options.keys) user.keys = options.keys;
     if (options.commands?.length) user.commands = options.commands;
@@ -4432,6 +4522,7 @@ function createLazyKeys(options = {}) {
   document.addEventListener("keydown", onKeydown, true);
   document.addEventListener("focusin", onFocusIn, true);
   document.addEventListener("focusout", onFocusOut, true);
+  window.addEventListener("keydown", onEscapeAfter);
   cleanups.unshift(
     settings.on((key) => {
       if (key === null || key === "enabled") applyEnabled();
@@ -4444,6 +4535,16 @@ function createLazyKeys(options = {}) {
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
   return instance;
+}
+function sourceList(field) {
+  if (!field) return [];
+  if (Array.isArray(field)) return field.map((s) => [s.id, s]);
+  return Object.entries(field);
+}
+function withId(source, id) {
+  const out = Object.create(source);
+  Object.defineProperty(out, "id", { value: id, enumerable: true });
+  return out;
 }
 export {
   COMMAND_EVENT,
@@ -4478,6 +4579,8 @@ export {
   parseSeq,
   parseSetArg,
   resolveOption,
+  settingHelp,
+  settingLabel,
   createLazyKeys as setup,
   tokenDisplay
 };

@@ -12,9 +12,10 @@
  *   1. disabled, or composing (IME)                 → the page's
  *   2. a `yieldTo` guard is true                   → the page's
  *   3. a LazyKeys surface is up (cmdline, float…)  → that surface's
- *   4. the caret is in a field                     → the field's (insert mode)
+ *   4. the caret is in a field                     → the field's (insert mode;
+ *                                                     Esc per `escapeInFields`)
  *   5. already handled, or Cmd/Alt held            → the page's
- *   6. a passthrough key                           → the browser's
+ *   6. a passthrough key, at the start of a sequence → the browser's
  *   7. otherwise                                   → the dispatcher's
  */
 
@@ -42,6 +43,7 @@ import type {
   PassthroughKey,
   PluginContext,
   PluginInfo,
+  PluginSources,
   PluginSpec,
   ResolvedOptions,
   Scroller,
@@ -57,6 +59,17 @@ import { VERSION } from '../version';
 export const COMMAND_EVENT = 'lazykeys:command';
 
 const DEFAULT_PASSTHROUGH = ['C-f', 'C-k'];
+
+/** Permalink anchors the common generators put inside headings, and whatever is hidden. */
+const DEFAULT_HEADING_IGNORE = [
+  'a.anchor',
+  'a.headerlink',
+  'a.header-anchor',
+  'a.heading-anchor',
+  'a.hash-link',
+  '[aria-hidden="true"]',
+  '[hidden]',
+].join(', ');
 
 function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
   const rootOpt = o.root ?? 'main';
@@ -76,7 +89,9 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
   );
   return {
     enabled: o.enabled ?? true,
+    enabledOption: o.enabledOption === false ? null : (o.enabledOption ?? 'lazy'),
     persist: o.persist ?? true,
+    escapeInFields: o.escapeInFields ?? 'page',
     namespace: o.namespace ?? 'lazykeys',
     passthrough,
     eventName: o.eventName ?? null,
@@ -88,6 +103,7 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
       }),
     root,
     headings,
+    headingIgnore: o.headingIgnore ?? DEFAULT_HEADING_IGNORE,
     sections,
     hintTargets:
       o.hintTargets ??
@@ -116,6 +132,12 @@ function resolveOptions(o: LazyKeysOptions): ResolvedOptions {
       }),
     mount: o.mount ?? (() => document.body ?? document.documentElement),
   };
+}
+
+/** Where a key event started, through shadow roots. */
+function originOf(e: Event): EventTarget | null {
+  const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+  return (path[0] as EventTarget | undefined) ?? e.target;
 }
 
 function createSession(namespace: string): SessionStore {
@@ -174,7 +196,10 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   const pluginInfo: PluginInfo[] = [];
   const healthFns: Array<{ plugin: string; fn: () => HealthItem[] }> = [];
   const cleanups: Array<() => void> = [];
-  const sources: SidebarSource[] = [];
+  // Every source registration, in order. The live set is the last one per
+  // id — so registering an id again replaces it, and removing that
+  // registration brings the previous one back. `null` hides the id.
+  const sourceEntries: Array<{ id: string; source: SidebarSource | null }> = [];
   const segments: StatusSegment[] = [];
   let enabled = false;
   let destroyed = false;
@@ -199,6 +224,24 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     if (!set) listeners.set(event, (set = new Set()));
     set.add(fn as Listener);
     return () => set?.delete(fn as Listener);
+  }
+
+  function liveSources(): SidebarSource[] {
+    const byId = new Map<string, SidebarSource | null>();
+    for (const entry of sourceEntries) byId.set(entry.id, entry.source);
+    return [...byId.values()].filter((s): s is SidebarSource => s !== null);
+  }
+
+  /** Register (or hide, with `false`) a sidebar source by id. Returns its removal. */
+  function addSource(id: string, source: SidebarSource | false): () => void {
+    let live: SidebarSource | null = null;
+    if (source) live = source.id === id ? source : withId(source, id);
+    const entry = { id, source: live };
+    sourceEntries.push(entry);
+    return () => {
+      const at = sourceEntries.indexOf(entry);
+      if (at !== -1) sourceEntries.splice(at, 1);
+    };
   }
 
   function pushLayer(layer: KeyLayer): () => void {
@@ -381,10 +424,12 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       return;
     }
 
-    const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
-    const origin = (path[0] as EventTarget | undefined) ?? e.target;
+    const origin = originOf(e);
     if (isEditable(origin)) {
-      if (e.key === 'Escape') {
+      // Esc in a field: 'blur' leaves it now, before the page hears the key.
+      // 'page' lets the page's own handlers go first (onEscapeAfter), and
+      // 'keep' leaves Esc in fields alone.
+      if (e.key === 'Escape' && opts.escapeInFields === 'blur') {
         (origin as HTMLElement).blur?.();
         setMode('normal');
         return;
@@ -398,9 +443,14 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     const token = keyName(e);
     if (!token) return;
 
+    // A passthrough key is the browser's when it would start a sequence. In
+    // the middle of one (`<leader> \``) it is just the next key.
     if (opts.passthrough.some((p) => p.key === token)) {
-      dispatcher.reset();
-      return;
+      const state = dispatcher.state;
+      if (!state.keys.length && !state.awaitingArg) {
+        dispatcher.reset();
+        return;
+      }
     }
 
     if (token === 'Escape') {
@@ -412,6 +462,22 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     }
 
     if (dispatcher.feed(token, e)) e.preventDefault();
+  }
+
+  /**
+   * `escapeInFields: 'page'` — Esc in a field, once every page handler has had
+   * it (this listens on window, in the bubble phase). A handler that called
+   * preventDefault() or stopped propagation has taken it; otherwise the field
+   * is left and the mode goes back to normal.
+   */
+  function onEscapeAfter(e: KeyboardEvent): void {
+    if (opts.escapeInFields !== 'page' || e.key !== 'Escape' || e.defaultPrevented) return;
+    if (!enabled || destroyed || e.isComposing || layers.length || yielding()) return;
+    const origin = originOf(e);
+    if (!isEditable(origin)) return;
+    if ((origin as Element).closest?.('[data-lazykeys]')) return;
+    (origin as HTMLElement).blur?.();
+    setMode('normal');
   }
 
   function onFocusIn(e: FocusEvent): void {
@@ -523,13 +589,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
         const cmds = value(spec.commands, ctx) ?? [];
         for (const c of cmds) own.push(commands.add(c, spec.name));
         stage.commands = cmds.length;
-        for (const s of value(spec.sources, ctx) ?? []) {
-          sources.push(s);
-          own.push(() => {
-            const at = sources.indexOf(s);
-            if (at !== -1) sources.splice(at, 1);
-          });
-        }
+        for (const [id, s] of sourceList(value(spec.sources, ctx))) own.push(addSource(id, s));
         for (const seg of value(spec.statusline, ctx) ?? []) {
           segments.push(seg);
           own.push(() => {
@@ -598,7 +658,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   // The instance
   // -------------------------------------------------------------------------
   const instance: LazyKeys & {
-    /** @internal */ _sources: SidebarSource[];
+    /** @internal */ _sources(): SidebarSource[];
     /** @internal */ _segments: StatusSegment[];
     /** @internal */ _echo(): { text: string; level?: Level };
   } = {
@@ -611,7 +671,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
     ui,
     options: opts,
     t,
-    _sources: sources,
+    _sources: liveSources,
     _segments: segments,
     _echo: () => echoState,
 
@@ -644,6 +704,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       document.removeEventListener('keydown', onKeydown, true);
       document.removeEventListener('focusin', onFocusIn, true);
       document.removeEventListener('focusout', onFocusOut, true);
+      window.removeEventListener('keydown', onEscapeAfter);
       for (const undo of cleanups.splice(0).reverse()) undo();
       if (echoTimer) clearTimeout(echoTimer);
       ui.destroy();
@@ -660,6 +721,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       return keymap.set(seq, spec, 'user');
     },
     command: (spec) => commands.add(spec, 'user'),
+    source: (id, source) => addSource(id, source),
     register(plugin) {
       unregister.get(plugin.name)?.();
       load([plugin], new Set());
@@ -693,6 +755,9 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
       emit('navigate', undefined);
       emit('render', undefined);
     },
+    redraw() {
+      if (!destroyed) emit('render', undefined);
+    },
     yieldTo(fn) {
       guards.add(fn);
       return () => guards.delete(fn);
@@ -719,8 +784,9 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   const builtins = builtinPlugins().filter((p) => !disabled.has(p.name) && !replaced.has(p.name));
 
   const tail: PluginSpec[] = [];
-  if (options.settings?.length || options.keys || options.commands?.length) {
+  if (options.settings?.length || options.keys || options.commands?.length || options.sources) {
     const user: PluginSpec = { name: 'user' };
+    if (options.sources) user.sources = options.sources;
     if (options.settings?.length) user.settings = options.settings;
     if (options.keys) user.keys = options.keys as Record<string, KeyMapping>;
     if (options.commands?.length) user.commands = options.commands;
@@ -734,6 +800,7 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   document.addEventListener('keydown', onKeydown, true);
   document.addEventListener('focusin', onFocusIn, true);
   document.addEventListener('focusout', onFocusOut, true);
+  window.addEventListener('keydown', onEscapeAfter);
   cleanups.unshift(
     settings.on((key) => {
       if (key === null || key === 'enabled') applyEnabled();
@@ -750,8 +817,22 @@ export function createLazyKeys(options: LazyKeysOptions = {}): LazyKeys {
   return instance;
 }
 
+/** A plugin's `sources`, as `[id, source | false]` pairs. */
+function sourceList(field: PluginSources | undefined): Array<[string, SidebarSource | false]> {
+  if (!field) return [];
+  if (Array.isArray(field)) return field.map((s) => [s.id, s]);
+  return Object.entries(field);
+}
+
+/** The same source under another id, without copying it (methods keep working). */
+function withId(source: SidebarSource, id: string): SidebarSource {
+  const out = Object.create(source) as SidebarSource;
+  Object.defineProperty(out, 'id', { value: id, enumerable: true });
+  return out;
+}
+
 export type InternalLazyKeys = LazyKeys & {
-  _sources: SidebarSource[];
+  _sources(): SidebarSource[];
   _segments: StatusSegment[];
   _echo(): { text: string; level?: Level };
 };
