@@ -214,6 +214,8 @@ export interface FloatHandle {
 export interface PickerItem {
   label: string;
   hint?: string;
+  /** With `filter`: also matched, as plain text (description, tags, a path). */
+  keywords?: readonly string[];
 }
 
 export interface PickerOptions<T extends PickerItem> {
@@ -222,6 +224,18 @@ export interface PickerOptions<T extends PickerItem> {
   items: T[];
   selected?: number;
   width?: string;
+  /**
+   * A fuzzy filter above the list, LazyVim style. The picker opens in insert
+   * mode: typing filters, ↑/↓ or Ctrl-N/Ctrl-P (Ctrl-J/Ctrl-K) move, Enter
+   * chooses, Esc goes to normal mode. In normal mode j/k, gg/G move, `i`, `a`
+   * or `/` go back to typing, and Esc or `q` close. Default false.
+   */
+  filter?: boolean;
+  /** The filter's initial text. */
+  query?: string;
+  /** The filter's placeholder. Default: the `picker.filter` message. */
+  placeholder?: string;
+  /** `index` is the item's position in `items`, whatever the filter shows. */
   onChoose(item: T, index: number): void;
 }
 

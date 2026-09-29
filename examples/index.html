@@ -67,6 +67,11 @@
       open a further menu. <kbd>Space</kbd><kbd>u</kbd> narrows it to the toggles. This demo adds its own group,
       <kbd>Space</kbd><kbd>d</kbd> <code>+demo</code>.</p>
 
+    <h2>Pickers</h2>
+    <p><kbd>Space</kbd><kbd>Space</kbd> opens a fuzzy picker over this demo's made-up site: type <em>mdl</em> and it
+      finds <em>modal-editing</em>. <kbd>Esc</kbd> drops to normal mode, where <kbd>j</kbd>/<kbd>k</kbd> move and
+      <kbd>i</kbd> types again; <kbd>Esc</kbd> once more closes. <code>:history</code> is filterable the same way.</p>
+
     <h2>Link hints</h2>
     <p>Press <kbd>f</kbd> to label every link in view and type a label to follow it; <kbd>F</kbd> opens it in a new
       tab. A few links to try: <a href="#hints">hints</a>, <a href="#search">search</a>,
@@ -121,7 +126,19 @@
       plugins: [
         {
           name: 'demo',
-          keys: ({ lk }) => ({
+          keys: ({ lk, ui }) => ({
+            // LazyVim's <leader><space>: a fuzzy picker over the site.
+            '<leader> <space>': {
+              desc: 'Find a page',
+              run: () =>
+                ui.picker({
+                  title: 'Pages',
+                  icon: 'file',
+                  filter: true,
+                  items: pages.map((page) => ({ label: page.title, hint: page.path, keywords: [page.path] })),
+                  onChoose: (item) => lk.navigate(item.hint),
+                }),
+            },
             '<leader> d': '+demo',
             '<leader> d h': { desc: 'Say hello', run: () => lk.exec('hello world') },
             '<leader> d t': { desc: 'Toggle LazyKeys', run: () => lk.toggle() },

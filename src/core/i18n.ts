@@ -162,6 +162,11 @@ export const defaultMessages = {
   'foot.close': 'close',
   'foot.scroll': 'scroll',
   'foot.choose': 'choose',
+  'foot.normal': 'normal mode',
+  'picker.filter': 'Filter …',
+  'picker.filterLabel': 'Filter the list',
+  'picker.empty': 'No matches',
+  'picker.count': '{n}/{total}',
   'help.title': 'Keymap',
   'help.intro':
     'Press {leader} and wait: every key that can follow it appears in the corner. That panel and this list are drawn from the same table the keys dispatch through, so neither can be out of date.',

@@ -160,7 +160,8 @@ Group labels are also declared for `g` (goto), `y` (yank), `Z` (quit), `[` (prev
 | command line | <kbd>Tab</kbd>/<kbd>Shift-Tab</kbd> complete · <kbd>↑</kbd><kbd>↓</kbd> menu, or history · <kbd>Ctrl-P</kbd>/<kbd>Ctrl-N</kbd> history · <kbd>Enter</kbd> run · <kbd>Esc</kbd> or backspace past the prefix leaves |
 | sidebar | <kbd>j</kbd><kbd>k</kbd> move · <kbd>gg</kbd>/<kbd>G</kbd> · <kbd>Enter</kbd>/<kbd>l</kbd>/<kbd>o</kbd> open, expand, flip · <kbd>h</kbd> collapse · <kbd>Space</kbd> flip · <kbd>/</kbd> filter · <kbd>Tab</kbd> or <kbd>1</kbd>–<kbd>9</kbd> source · <kbd>R</kbd> reload · <kbd>q</kbd> close |
 | floats (`:help` …) | <kbd>j</kbd><kbd>k</kbd> <kbd>Ctrl-D</kbd><kbd>Ctrl-U</kbd> <kbd>g</kbd><kbd>G</kbd> scroll · <kbd>q</kbd>/<kbd>Esc</kbd> close |
-| pickers | <kbd>j</kbd><kbd>k</kbd> move · <kbd>Enter</kbd> choose |
+| pickers | <kbd>j</kbd><kbd>k</kbd> move · <kbd>gg</kbd>/<kbd>G</kbd> · <kbd>Enter</kbd> choose · <kbd>q</kbd>/<kbd>Esc</kbd> close |
+| filtered pickers (`:history`) | type to filter · <kbd>↑</kbd><kbd>↓</kbd> or <kbd>Ctrl-N</kbd>/<kbd>Ctrl-P</kbd> move · <kbd>Enter</kbd> choose · <kbd>Esc</kbd> normal mode, then <kbd>j</kbd><kbd>k</kbd> move, <kbd>i</kbd> filter again, <kbd>Esc</kbd>/<kbd>q</kbd> close |
 | link hints | type the label · <kbd>Backspace</kbd> · <kbd>Enter</kbd> takes the first match · <kbd>Esc</kbd> |
 
 ### Left alone on purpose
@@ -350,6 +351,29 @@ Plugins talk through services: `ctx.provide('name', api)` and `lk.use('name')`. 
 | `whichkey` | `show(tokens)`, `hide()`, `visible()` |
 
 `cmdline.prompt()` is how `/` is built, and how you would add a `?` backwards search or a `#` tag prompt of your own.
+
+### Pickers
+
+`ctx.ui.picker()` (or `lk.ui.picker()`) opens a list in a float. With `filter: true` it gets LazyVim's fuzzy filter: it opens in insert mode, typing narrows the list and highlights the matched letters, <kbd>Esc</kbd> drops to normal mode (<kbd>j</kbd>/<kbd>k</kbd>, <kbd>gg</kbd>/<kbd>G</kbd>, <kbd>i</kbd> to type again) and a second <kbd>Esc</kbd> closes.
+
+```ts
+'<leader> <space>': {
+  desc: 'Find a page',
+  run: () =>
+    ctx.ui.picker({
+      title: 'Pages',
+      filter: true,                        // default false: a plain j/k list
+      items: pages.map((p) => ({
+        label: p.title,                    // matched fuzzily and highlighted
+        hint: p.path,                      // shown on the right
+        keywords: [p.path, ...p.tags],     // matched as plain text
+      })),
+      onChoose: (item, index) => lk.navigate(pages[index].path), // index into `items`
+    }),
+},
+```
+
+`query` sets the filter's initial text and `placeholder` its hint. The matcher ignores case and diacritics (`ape` finds `Åpen`), prefers runs, word starts and camelCase humps, and drops letters strewn across the text. It is exported for your own lists: `fuzzyMatch(query, text)` → `{ score, positions } | null`, and `fuzzyFilter(query, items, label, keywords?)` → the hits, best first, each with its original `index`.
 
 ---
 
