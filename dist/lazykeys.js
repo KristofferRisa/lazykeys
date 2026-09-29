@@ -480,6 +480,11 @@ var defaultMessages = {
   "foot.close": "close",
   "foot.scroll": "scroll",
   "foot.choose": "choose",
+  "foot.normal": "normal mode",
+  "picker.filter": "Filter …",
+  "picker.filterLabel": "Filter the list",
+  "picker.empty": "No matches",
+  "picker.count": "{n}/{total}",
   "help.title": "Keymap",
   "help.intro": "Press {leader} and wait: every key that can follow it appears in the corner. That panel and this list are drawn from the same table the keys dispatch through, so neither can be out of date.",
   "pass.C-f": "Native find stays native — / is here as well",
@@ -1128,6 +1133,80 @@ function icon(name, className = "") {
 }
 var iconNames = Object.keys(ICONS);
 
+// src/core/fuzzy.ts
+var FOLD = { æ: "a", ø: "o", œ: "o", ß: "s", đ: "d", ł: "l", ı: "i", þ: "t", ð: "d" };
+function fold(text) {
+  let out = "";
+  for (let i = 0; i < text.length; i++) {
+    const unit = text.charAt(i);
+    const lower = unit.toLowerCase();
+    const one = lower.length === 1 ? lower : unit;
+    out += FOLD[one] ?? one.normalize("NFD").charAt(0);
+  }
+  return out;
+}
+var BOUNDARY = /[\s\-_./\\:·,;()[\]{}'"]/u;
+function isBoundary(text, index) {
+  if (index === 0) return true;
+  const before = text.charAt(index - 1);
+  if (BOUNDARY.test(before)) return true;
+  const here = text.charAt(index);
+  return before === before.toLowerCase() && here !== here.toLowerCase() && here === here.toUpperCase();
+}
+function fuzzyMatch(query, text) {
+  const q = fold(query.replace(/\s+/gu, ""));
+  if (!q) return { score: 0, positions: [] };
+  const t = fold(text);
+  if (q.length > t.length) return null;
+  let best = null;
+  const head = q.charAt(0);
+  for (let start = t.indexOf(head); start !== -1; start = t.indexOf(head, start + 1)) {
+    const positions = [];
+    let score = 0;
+    let ti = start;
+    let prev = -2;
+    for (let qi = 0; qi < q.length; qi++) {
+      const qc = q.charAt(qi);
+      while (ti < t.length && t.charAt(ti) !== qc) ti++;
+      if (ti >= t.length) break;
+      score += 1;
+      if (ti === prev + 1) score += 8;
+      if (isBoundary(text, ti)) score += 6;
+      positions.push(ti);
+      prev = ti;
+      ti++;
+    }
+    if (positions.length !== q.length) break;
+    const first = positions[0] ?? 0;
+    const gaps = (positions[positions.length - 1] ?? 0) - first - (q.length - 1);
+    score -= gaps + first * 0.3 + t.length * 0.05;
+    if (first === 0) score += 4;
+    if (!best || score > best.score) best = { score, positions };
+  }
+  return best && best.score >= q.length ? best : null;
+}
+function fuzzyFilter(query, items, label, keywords = () => []) {
+  const q = fold(query.trim().replace(/\s+/gu, " "));
+  const out = [];
+  items.forEach((item, index) => {
+    if (!q) {
+      out.push({ item, index, match: { score: 0, positions: [] } });
+      return;
+    }
+    let match = fuzzyMatch(query, label(item));
+    for (const text of keywords(item)) {
+      const t = fold(text);
+      const at = t.indexOf(q);
+      if (at === -1) continue;
+      const score = isBoundary(text, at) ? 6 : 3;
+      if (!match || match.score < score) match = { score, positions: [] };
+    }
+    if (match) out.push({ item, index, match });
+  });
+  if (q) out.sort((a, b) => b.match.score - a.match.score || a.index - b.index);
+  return out;
+}
+
 // src/core/ui.ts
 function createUi(deps) {
   const { t } = deps;
@@ -1174,7 +1253,7 @@ function createUi(deps) {
     }
     onClose?.();
   }
-  function float(opts) {
+  function float(opts, typing) {
     closeFloat();
     const titleId = `lk-float-title-${++floatSeq}`;
     const body = h("div", { class: "lk-float-body", attrs: { tabindex: "0" } }, opts.body);
@@ -1218,6 +1297,7 @@ function createUi(deps) {
         if (e.metaKey || e.altKey) return false;
         if (opts.onKey && opts.onKey(e) === true) return true;
         const key = e.key;
+        if (typing?.()) return key === "Tab";
         if (key === "Escape" || key === "q" || key === "?") {
           closeFloat();
           return true;
@@ -1252,68 +1332,222 @@ function createUi(deps) {
   }
   function picker(opts) {
     const items = opts.items;
-    let sel = Math.max(0, Math.min(opts.selected ?? 0, items.length - 1));
+    const filtering = opts.filter === true;
     const listId = `lk-picker-${floatSeq + 1}`;
-    const list = h("ul", { class: "lk-picker", attrs: { role: "listbox", id: listId } });
+    const list = h("ul", { class: "lk-picker", attrs: { role: "listbox", id: listId, "aria-label": opts.title } });
+    let shown = items.map((item, index) => ({
+      item,
+      index,
+      positions: []
+    }));
+    let sel = Math.max(0, Math.min(opts.selected ?? 0, items.length - 1));
+    let mode = "insert";
+    let pendingG = false;
+    const input = filtering ? h("input", {
+      class: "lk-picker-input",
+      attrs: {
+        type: "text",
+        role: "combobox",
+        "aria-expanded": "true",
+        "aria-controls": listId,
+        "aria-autocomplete": "list",
+        "aria-label": t("picker.filterLabel"),
+        autocomplete: "off",
+        spellcheck: "false",
+        placeholder: opts.placeholder ?? t("picker.filter")
+      },
+      on: {
+        input: () => {
+          refilter();
+          sel = 0;
+          draw();
+        }
+      }
+    }) : null;
+    const count = filtering ? h("span", { class: "lk-picker-count", attrs: { "aria-hidden": "true" } }) : null;
+    const foot = h("div", { class: "lk-picker-footwrap" });
+    function refilter() {
+      if (!input) return;
+      shown = fuzzyFilter(
+        input.value,
+        items,
+        (item) => item.label,
+        (item) => item.keywords ?? []
+      ).map(({ item, index, match }) => ({ item, index, positions: match.positions }));
+    }
+    function label(text, positions) {
+      if (!positions.length) return [text];
+      const hits = new Set(positions);
+      const out = [];
+      let run = "";
+      let marked = false;
+      const flush = () => {
+        if (run) out.push(marked ? h("mark", { class: "lk-picker-match", text: run }) : run);
+        run = "";
+      };
+      for (let i = 0; i < text.length; i++) {
+        if (hits.has(i) !== marked) {
+          flush();
+          marked = !marked;
+        }
+        run += text.charAt(i);
+      }
+      flush();
+      return out;
+    }
     function draw() {
-      replace(
-        list,
-        items.map(
-          (item, i) => h(
-            "li",
-            {
-              class: i === sel ? "is-selected" : "",
-              attrs: { role: "option", "aria-selected": i === sel ? "true" : "false", "data-i": i },
-              on: {
-                click: () => choose(i)
-              }
-            },
-            [
-              h("span", { class: "lk-picker-label", text: item.label }),
-              item.hint ? h("span", { class: "lk-picker-hint", text: item.hint }) : null
-            ]
+      if (sel >= shown.length) sel = Math.max(0, shown.length - 1);
+      if (!shown.length) {
+        replace(list, h("li", { class: "lk-picker-empty", attrs: { role: "presentation" }, text: t("picker.empty") }));
+      } else {
+        replace(
+          list,
+          shown.map(
+            ({ item, positions }, i) => h(
+              "li",
+              {
+                class: i === sel ? "is-selected" : "",
+                attrs: {
+                  role: "option",
+                  id: `${listId}-${i}`,
+                  "aria-selected": i === sel ? "true" : "false",
+                  "data-i": i
+                },
+                on: {
+                  click: () => choose(i),
+                  mousemove: () => {
+                    if (sel === i) return;
+                    sel = i;
+                    mark();
+                  }
+                }
+              },
+              [
+                h("span", { class: "lk-picker-label" }, label(item.label, positions)),
+                item.hint ? h("span", { class: "lk-picker-hint", text: item.hint }) : null
+              ]
+            )
           )
-        )
-      );
+        );
+      }
+      if (count) count.textContent = t("picker.count", { n: shown.length, total: items.length });
+      mark();
+    }
+    function mark() {
+      Array.from(list.children).forEach((node2, i) => {
+        if (node2.getAttribute("role") !== "option") return;
+        node2.classList.toggle("is-selected", i === sel);
+        node2.setAttribute("aria-selected", i === sel ? "true" : "false");
+      });
       const node = list.children[sel];
+      if (input) {
+        if (node && shown.length) input.setAttribute("aria-activedescendant", node.id);
+        else input.removeAttribute("aria-activedescendant");
+      }
       node?.scrollIntoView?.({ block: "nearest" });
     }
-    function choose(i) {
-      const item = items[i];
-      closeFloat();
-      if (item) opts.onChoose(item, i);
+    function move(by) {
+      if (!shown.length) return;
+      sel = (sel + by + shown.length) % shown.length;
+      mark();
     }
-    draw();
-    return float({
-      title: opts.title,
-      icon: opts.icon ?? "list",
-      width: opts.width ?? "min(420px, 92vw)",
-      class: "lk-float--picker",
-      body: list,
-      footer: footer([
-        [["j", "k"], t("foot.move")],
-        [["↵"], t("foot.choose")],
-        [["q"], t("foot.close")]
-      ]),
-      onKey(e) {
-        if (!items.length) return false;
-        if (e.key === "j" || e.key === "ArrowDown" || e.ctrlKey && e.key === "n") {
-          sel = (sel + 1) % items.length;
-          draw();
-          return true;
+    function choose(i) {
+      const entry = shown[i];
+      closeFloat();
+      if (entry) opts.onChoose(entry.item, entry.index);
+    }
+    function setMode(next) {
+      mode = next;
+      pendingG = false;
+      if (input) {
+        input.readOnly = next === "normal";
+        input.closest(".lk-float-win")?.classList.toggle("is-normal", next === "normal");
+        try {
+          input.focus({ preventScroll: true });
+        } catch {
         }
-        if (e.key === "k" || e.key === "ArrowUp" || e.ctrlKey && e.key === "p") {
-          sel = (sel - 1 + items.length) % items.length;
-          draw();
-          return true;
-        }
-        if (e.key === "Enter") {
-          choose(sel);
+      }
+      replace(
+        foot,
+        filtering && next === "insert" ? footer([
+          [["↑", "↓"], t("foot.move")],
+          [["↵"], t("foot.choose")],
+          [["esc"], t("foot.normal")]
+        ]) : footer([
+          [["j", "k"], t("foot.move")],
+          ...filtering ? [[["i"], t("foot.filter")]] : [],
+          [["↵"], t("foot.choose")],
+          [["q"], t("foot.close")]
+        ])
+      );
+    }
+    function onKey(e) {
+      const key = e.key;
+      const down = key === "ArrowDown" || e.ctrlKey && (key === "n" || key === "j");
+      const up = key === "ArrowUp" || e.ctrlKey && (key === "p" || key === "k");
+      if (down || up) {
+        move(down ? 1 : -1);
+        return true;
+      }
+      if (key === "Enter") {
+        if (shown.length) choose(sel);
+        return true;
+      }
+      if (filtering && mode === "insert") {
+        if (key === "Escape") {
+          setMode("normal");
           return true;
         }
         return false;
       }
-    });
+      if (e.ctrlKey || e.metaKey || e.altKey) return false;
+      if (key === "j" || key === "k") {
+        move(key === "j" ? 1 : -1);
+        return true;
+      }
+      if (key === "G") {
+        sel = Math.max(0, shown.length - 1);
+        mark();
+        return true;
+      }
+      if (key === "g") {
+        if (pendingG) {
+          sel = 0;
+          mark();
+        }
+        pendingG = !pendingG;
+        return true;
+      }
+      pendingG = false;
+      if (filtering && (key === "i" || key === "a" || key === "/")) {
+        setMode("insert");
+        return true;
+      }
+      return false;
+    }
+    if (input && opts.query) {
+      input.value = opts.query;
+      refilter();
+    }
+    draw();
+    setMode("insert");
+    const handle = float(
+      {
+        title: opts.title,
+        icon: opts.icon ?? "list",
+        width: opts.width ?? (filtering ? "min(520px, 92vw)" : "min(420px, 92vw)"),
+        class: filtering ? "lk-float--picker lk-float--filter" : "lk-float--picker",
+        body: input ? [h("div", { class: "lk-picker-search" }, [icon("search"), input, count]), list] : list,
+        footer: foot,
+        onKey
+      },
+      () => filtering && mode === "insert"
+    );
+    if (input) {
+      setMode("insert");
+      input.select();
+    }
+    return handle;
   }
   return {
     root,
@@ -1790,6 +2024,7 @@ var cmdline = definePlugin({
         ui.picker({
           title: t("history.title"),
           icon: "command",
+          filter: true,
           items: all.slice().reverse().map((line) => ({ label: line })),
           onChoose: (item) => api.open(item.label.charAt(0), item.label.slice(1))
         });
@@ -2021,8 +2256,8 @@ function makeHighlight(ranges) {
 function collectMatches(root, needle, ignoreCase, exclude) {
   const out = [];
   if (!needle) return out;
-  const fold = ignoreCase && !/[A-Z]/.test(needle);
-  const probe = fold ? needle.toLowerCase() : needle;
+  const fold2 = ignoreCase && !/[A-Z]/.test(needle);
+  const probe = fold2 ? needle.toLowerCase() : needle;
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node2) {
       if (!node2.nodeValue || !node2.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
@@ -2036,7 +2271,7 @@ function collectMatches(root, needle, ignoreCase, exclude) {
   });
   let node;
   while ((node = walker.nextNode()) && out.length < MAX) {
-    const text = fold ? (node.nodeValue ?? "").toLowerCase() : node.nodeValue ?? "";
+    const text = fold2 ? (node.nodeValue ?? "").toLowerCase() : node.nodeValue ?? "";
     let from = 0;
     while (out.length < MAX) {
       const at = text.indexOf(probe, from);
@@ -4564,7 +4799,10 @@ export {
   definePlugin,
   displaySeq,
   explorer,
+  fold,
   formatOption,
+  fuzzyFilter,
+  fuzzyMatch,
   h,
   icon,
   iconNames,

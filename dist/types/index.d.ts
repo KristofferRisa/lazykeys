@@ -20,6 +20,8 @@ export type { SettingSpec, SettingType, SettingValue, SettingsListener, StorageA
 export { applySet, formatOption, parseSetArg, resolveOption, settingHelp, settingLabel } from './core/set';
 export type { SetArg, SetOp, SetResult } from './core/set';
 export { labelsFor } from './core/labels';
+export { fold, fuzzyFilter, fuzzyMatch } from './core/fuzzy';
+export type { FuzzyMatch, Ranked } from './core/fuzzy';
 export { LEADER, displaySeq, isEditable, keyName, normalizeSeq, normalizeToken, parseSeq, tokenDisplay } from './core/keys';
 export { createTranslator, defaultMessages } from './core/i18n';
 export type { MessageKey, MessageOverrides, Messages, Translate } from './core/i18n';

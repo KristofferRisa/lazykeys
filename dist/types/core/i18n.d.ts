@@ -145,6 +145,11 @@ export declare const defaultMessages: {
     'foot.close': string;
     'foot.scroll': string;
     'foot.choose': string;
+    'foot.normal': string;
+    'picker.filter': string;
+    'picker.filterLabel': string;
+    'picker.empty': string;
+    'picker.count': string;
     'help.title': string;
     'help.intro': string;
     'pass.C-f': string;
