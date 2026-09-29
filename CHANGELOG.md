@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Fuzzy filter for pickers**, LazyVim style: `ui.picker({ filter: true, … })` puts a filter above the list. It opens in insert mode (type to filter, <kbd>↑</kbd><kbd>↓</kbd>/<kbd>Ctrl-N</kbd><kbd>Ctrl-P</kbd> move, <kbd>Enter</kbd> chooses); <kbd>Esc</kbd> goes to normal mode (<kbd>j</kbd><kbd>k</kbd>, <kbd>gg</kbd>/<kbd>G</kbd>, <kbd>i</kbd>/<kbd>a</kbd>/<kbd>/</kbd> to type again) and <kbd>Esc</kbd> or <kbd>q</kbd> there closes. Matched letters are highlighted, the title shows `n/total`, and the input is an ARIA combobox over the listbox. New options `query` and `placeholder`; items may carry `keywords`, matched as plain text. `onChoose` still gets the item's index in `items`.
+- `:history` uses the filter.
+- `fuzzyMatch()`, `fuzzyFilter()` and `fold()` are exported, with the `FuzzyMatch` and `Ranked` types.
+- Messages `picker.filter`, `picker.filterLabel`, `picker.empty`, `picker.count` and `foot.normal`.
+
+### Changed
+
+- Unfiltered pickers take <kbd>gg</kbd>/<kbd>G</kbd> to the first and last item (they scrolled the float), and moving the pointer over an item selects it.
+
 ## [0.1.1] — 2026-09-28
 
 Fixes for the gaps the first two consumers hit — kristoffer.dev ([#69](https://github.com/KristofferRisa/kristoffer.dev/pull/69)) and portal.kristoffer.dev ([#3](https://github.com/KristofferRisa/portal.kristoffer.dev/pull/3)) — so neither needs a workaround.

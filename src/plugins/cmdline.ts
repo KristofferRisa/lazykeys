@@ -373,6 +373,7 @@ export const cmdline = definePlugin({
         ui.picker({
           title: t('history.title'),
           icon: 'command',
+          filter: true,
           items: all
             .slice()
             .reverse()
