@@ -2,7 +2,9 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] — 2026-09-30
+
+Fuzzy filtering for pickers, the way LazyVim's picker works.
 
 ### Added
 
@@ -62,5 +64,6 @@ The first release: kristoffer.dev's vim mode, extracted and generalised into a f
 - Theming entirely through `--lk-*` custom properties with tokyonight-ish defaults; reduced-motion aware; dialog, combobox, tree and live-region semantics.
 - Builds: ESM, minified IIFE (`window.LazyKeys`), CSS and type declarations, committed in `dist/`.
 
+[0.2.0]: https://github.com/KristofferRisa/lazykeys/releases/tag/v0.2.0
 [0.1.1]: https://github.com/KristofferRisa/lazykeys/releases/tag/v0.1.1
 [0.1.0]: https://github.com/KristofferRisa/lazykeys/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 {
   "name": "lazykeys",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A LazyVim-shaped modal keyboard layer for any website: leader key with which-key, floating command line, link hints, / search and a neo-tree sidebar.",
   "license": "MIT",
   "author": "Kristoffer Risa (https://kristoffer.dev)",
