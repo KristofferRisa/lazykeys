@@ -1,4 +1,4 @@
-/*! lazykeys v0.1.1 | MIT | https://github.com/KristofferRisa/lazykeys */
+/*! lazykeys v0.2.0 | MIT | https://github.com/KristofferRisa/lazykeys */
 
 // src/core/keys.ts
 var LEADER = "<leader>";
@@ -2043,7 +2043,7 @@ var cmdline = definePlugin({
 });
 
 // src/version.ts
-var VERSION = "0.1.1";
+var VERSION = "0.2.0";
 
 // src/plugins/core.ts
 function storageWorks(kind) {
