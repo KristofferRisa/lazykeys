@@ -55,11 +55,11 @@
     "check": "pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3",
+    "@types/node": "^26.6.5",
     "esbuild": "^0.28.2",
     "happy-dom": "^20.14.5",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.5"
   },
   "packageManager": "pnpm@11.8.0",
   "engines": {
